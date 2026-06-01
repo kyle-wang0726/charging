@@ -59,10 +59,11 @@ mvn spring-boot:run
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/user/request`
-- `PUT /api/user/request`
-- `DELETE /api/user/request?userId=...`
-- `POST /api/user/end`
-- `GET /api/user/queue-info?userId=...`
+- `PUT /api/user/request` (supports `requestId`)
+- `DELETE /api/user/request?userId=...&requestId=...`
+- `POST /api/user/end` (supports `requestId`)
+- `GET /api/user/queue-info?userId=...&requestId=...`
+- `GET /api/user/requests?userId=...&includeFinished=false`
 - `GET /api/user/bills?userId=...`
 - `GET /api/admin/piles`
 - `POST /api/admin/pile-state`

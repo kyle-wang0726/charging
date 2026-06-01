@@ -39,6 +39,10 @@ public class UserController {
     @PutMapping("/request")
     public ApiResponse<Map<String, Object>> modify(@RequestBody Map<String, Object> body) {
         Long userId = longNum(body.get("userId"));
+        Long requestId = null;
+        if (body.containsKey("requestId") && body.get("requestId") != null && !str(body.get("requestId")).isEmpty()) {
+            requestId = longNum(body.get("requestId"));
+        }
         ChargeMode mode = null;
         if (body.containsKey("mode") && body.get("mode") != null && !str(body.get("mode")).isEmpty()) {
             mode = ChargeMode.valueOf(str(body.get("mode")).toUpperCase());
@@ -47,26 +51,38 @@ public class UserController {
         if (body.containsKey("requestKwh") && body.get("requestKwh") != null && !str(body.get("requestKwh")).isEmpty()) {
             requestKwh = doubleNum(body.get("requestKwh"));
         }
-        ChargingRequest req = stationService.modifyRequest(userId, mode, requestKwh);
+        ChargingRequest req = stationService.modifyRequest(userId, requestId, mode, requestKwh);
         return ApiResponse.ok("request updated", requestData(req));
     }
 
     @DeleteMapping("/request")
-    public ApiResponse<Void> cancel(@RequestParam("userId") Long userId) {
-        stationService.cancelRequest(userId);
+    public ApiResponse<Void> cancel(@RequestParam("userId") Long userId,
+                                    @RequestParam(value = "requestId", required = false) Long requestId) {
+        stationService.cancelRequest(userId, requestId);
         return ApiResponse.ok("request canceled", null);
     }
 
     @PostMapping("/end")
     public ApiResponse<ChargeBill> end(@RequestBody Map<String, Object> body) {
         Long userId = longNum(body.get("userId"));
-        ChargeBill bill = stationService.endCharging(userId);
+        Long requestId = null;
+        if (body.containsKey("requestId") && body.get("requestId") != null && !str(body.get("requestId")).isEmpty()) {
+            requestId = longNum(body.get("requestId"));
+        }
+        ChargeBill bill = stationService.endCharging(userId, requestId);
         return ApiResponse.ok("charging ended", bill);
     }
 
     @GetMapping("/queue-info")
-    public ApiResponse<Map<String, Object>> queueInfo(@RequestParam("userId") Long userId) {
-        return ApiResponse.ok(stationService.getQueueInfo(userId));
+    public ApiResponse<Map<String, Object>> queueInfo(@RequestParam("userId") Long userId,
+                                                      @RequestParam(value = "requestId", required = false) Long requestId) {
+        return ApiResponse.ok(stationService.getQueueInfo(userId, requestId));
+    }
+
+    @GetMapping("/requests")
+    public ApiResponse<List<Map<String, Object>>> requests(@RequestParam("userId") Long userId,
+                                                           @RequestParam(value = "includeFinished", defaultValue = "false") boolean includeFinished) {
+        return ApiResponse.ok(stationService.getUserRequests(userId, includeFinished));
     }
 
     @GetMapping("/bills")

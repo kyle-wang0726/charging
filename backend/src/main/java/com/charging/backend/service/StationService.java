@@ -76,9 +76,6 @@ public class StationService {
     public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh) {
         refreshAndDispatch(now());
         validateUser(userId);
-        if (findActiveRequestByUser(userId) != null) {
-            throw new IllegalArgumentException("active request already exists");
-        }
         if (waitingFast.size() + waitingSlow.size() >= config.getWaitingAreaSize()) {
             throw new IllegalArgumentException("waiting area is full");
         }
@@ -96,9 +93,9 @@ public class StationService {
         return req;
     }
 
-    public synchronized ChargingRequest modifyRequest(Long userId, ChargeMode mode, Double requestKwh) {
+    public synchronized ChargingRequest modifyRequest(Long userId, Long requestId, ChargeMode mode, Double requestKwh) {
         refreshAndDispatch(now());
-        ChargingRequest req = requiredActiveRequest(userId);
+        ChargingRequest req = resolveRequestForModify(userId, requestId);
         if (mode != null && req.getMode() != mode) {
             if (req.getStatus() != RequestStatus.WAITING_AREA) {
                 throw new IllegalArgumentException("mode can only be changed in waiting area");
@@ -118,9 +115,9 @@ public class StationService {
         return req;
     }
 
-    public synchronized void cancelRequest(Long userId) {
+    public synchronized void cancelRequest(Long userId, Long requestId) {
         refreshAndDispatch(now());
-        ChargingRequest req = requiredActiveRequest(userId);
+        ChargingRequest req = resolveRequestForCancel(userId, requestId);
         if (req.getStatus() == RequestStatus.WAITING_AREA) {
             waitingListByMode(req.getMode()).remove(req.getId());
             req.setStatus(RequestStatus.CANCELED);
@@ -148,9 +145,9 @@ public class StationService {
         }
     }
 
-    public synchronized ChargeBill endCharging(Long userId) {
+    public synchronized ChargeBill endCharging(Long userId, Long requestId) {
         refreshAndDispatch(now());
-        ChargingRequest req = requiredActiveRequest(userId);
+        ChargingRequest req = resolveRequestForEnd(userId, requestId);
         if (req.getStatus() != RequestStatus.CHARGING) {
             throw new IllegalArgumentException("request is not charging");
         }
@@ -162,15 +159,21 @@ public class StationService {
         return bill;
     }
 
-    public synchronized Map<String, Object> getQueueInfo(Long userId) {
+    public synchronized Map<String, Object> getQueueInfo(Long userId, Long requestId) {
         refreshAndDispatch(now());
-        ChargingRequest req = findActiveRequestByUser(userId);
-        Map<String, Object> data = new LinkedHashMap<>();
-        if (req == null) {
-            data.put("active", false);
-            data.put("systemTime", now());
-            return data;
+        ChargingRequest req;
+        try {
+            req = resolveRequestForQueueInfo(userId, requestId);
+        } catch (IllegalArgumentException ex) {
+            if ("no active request".equals(ex.getMessage())) {
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("active", false);
+                data.put("systemTime", now());
+                return data;
+            }
+            throw ex;
         }
+        Map<String, Object> data = new LinkedHashMap<>();
         data.put("active", true);
         data.put("requestId", req.getId());
         data.put("status", req.getStatus());
@@ -183,7 +186,35 @@ public class StationService {
         data.put("startTime", req.getChargeStartTime());
         data.put("expectedFinishTime", req.getExpectedFinishTime());
         data.put("systemTime", now());
+        data.put("multipleActiveRequests", findActiveRequestsByUser(userId).size() > 1);
         return data;
+    }
+
+    public synchronized List<Map<String, Object>> getUserRequests(Long userId, boolean includeFinished) {
+        refreshAndDispatch(now());
+        validateUser(userId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ChargingRequest req : requests.values()) {
+            if (!Objects.equals(req.getUserId(), userId)) {
+                continue;
+            }
+            if (!includeFinished && !isActive(req)) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("requestId", req.getId());
+            item.put("status", req.getStatus());
+            item.put("mode", req.getMode());
+            item.put("queueNumber", req.getQueueNumber());
+            item.put("requestKwh", req.getRequestedKwh());
+            item.put("pileId", req.getPileId());
+            item.put("frontCars", countFrontCars(req));
+            item.put("enqueueTime", req.getEnqueueTime());
+            item.put("startTime", req.getChargeStartTime());
+            item.put("expectedFinishTime", req.getExpectedFinishTime());
+            result.add(item);
+        }
+        return result;
     }
 
     public synchronized List<ChargeBill> getUserBills(Long userId) {
@@ -572,24 +603,114 @@ public class StationService {
         return user;
     }
 
-    private ChargingRequest findActiveRequestByUser(Long userId) {
-        for (ChargingRequest req : requests.values()) {
-            if (Objects.equals(req.getUserId(), userId)
-                    && (req.getStatus() == RequestStatus.WAITING_AREA
-                    || req.getStatus() == RequestStatus.QUEUED
-                    || req.getStatus() == RequestStatus.CHARGING)) {
-                return req;
-            }
-        }
-        return null;
+    private boolean isActive(ChargingRequest req) {
+        return req != null && isActiveStatus(req.getStatus());
     }
 
-    private ChargingRequest requiredActiveRequest(Long userId) {
-        ChargingRequest req = findActiveRequestByUser(userId);
-        if (req == null) {
+    private boolean isActiveStatus(RequestStatus status) {
+        return status == RequestStatus.WAITING_AREA
+                || status == RequestStatus.QUEUED
+                || status == RequestStatus.CHARGING;
+    }
+
+    private List<ChargingRequest> findActiveRequestsByUser(Long userId) {
+        List<ChargingRequest> list = new ArrayList<>();
+        for (ChargingRequest req : requests.values()) {
+            if (Objects.equals(req.getUserId(), userId) && isActive(req)) {
+                list.add(req);
+            }
+        }
+        return list;
+    }
+
+    private ChargingRequest resolveActiveRequest(Long userId, Long requestId) {
+        validateUser(userId);
+        if (requestId != null) {
+            ChargingRequest req = requests.get(requestId);
+            if (req == null || !Objects.equals(req.getUserId(), userId)) {
+                throw new IllegalArgumentException("request not found for user");
+            }
+            if (!isActive(req)) {
+                throw new IllegalArgumentException("request is not active");
+            }
+            return req;
+        }
+        List<ChargingRequest> active = findActiveRequestsByUser(userId);
+        if (active.isEmpty()) {
             throw new IllegalArgumentException("no active request");
         }
-        return req;
+        if (active.size() > 1) {
+            throw new IllegalArgumentException("multiple active requests, requestId is required");
+        }
+        return active.get(0);
+    }
+
+    private ChargingRequest resolveRequestForModify(Long userId, Long requestId) {
+        if (requestId != null) {
+            return resolveActiveRequest(userId, requestId);
+        }
+        List<ChargingRequest> waiting = findActiveRequestsByUser(userId).stream()
+                .filter(req -> req.getStatus() == RequestStatus.WAITING_AREA)
+                .toList();
+        if (waiting.isEmpty()) {
+            throw new IllegalArgumentException("no waiting-area request to modify");
+        }
+        if (waiting.size() > 1) {
+            throw new IllegalArgumentException("multiple waiting-area requests, requestId is required");
+        }
+        return waiting.get(0);
+    }
+
+    private ChargingRequest resolveRequestForCancel(Long userId, Long requestId) {
+        if (requestId != null) {
+            return resolveActiveRequest(userId, requestId);
+        }
+        List<ChargingRequest> active = findActiveRequestsByUser(userId);
+        if (active.isEmpty()) {
+            throw new IllegalArgumentException("no active request");
+        }
+        if (active.size() == 1) {
+            return active.get(0);
+        }
+        List<ChargingRequest> waiting = active.stream().filter(req -> req.getStatus() == RequestStatus.WAITING_AREA).toList();
+        if (waiting.size() == 1) {
+            return waiting.get(0);
+        }
+        throw new IllegalArgumentException("multiple active requests, requestId is required");
+    }
+
+    private ChargingRequest resolveRequestForEnd(Long userId, Long requestId) {
+        if (requestId != null) {
+            return resolveActiveRequest(userId, requestId);
+        }
+        List<ChargingRequest> charging = findActiveRequestsByUser(userId).stream()
+                .filter(req -> req.getStatus() == RequestStatus.CHARGING)
+                .toList();
+        if (charging.isEmpty()) {
+            throw new IllegalArgumentException("no charging request to end");
+        }
+        if (charging.size() > 1) {
+            throw new IllegalArgumentException("multiple charging requests, requestId is required");
+        }
+        return charging.get(0);
+    }
+
+    private ChargingRequest resolveRequestForQueueInfo(Long userId, Long requestId) {
+        if (requestId != null) {
+            return resolveActiveRequest(userId, requestId);
+        }
+        List<ChargingRequest> active = findActiveRequestsByUser(userId);
+        if (active.isEmpty()) {
+            throw new IllegalArgumentException("no active request");
+        }
+        if (active.size() == 1) {
+            return active.get(0);
+        }
+        List<ChargingRequest> waiting = active.stream().filter(req -> req.getStatus() == RequestStatus.WAITING_AREA).toList();
+        if (!waiting.isEmpty()) {
+            return waiting.get(0);
+        }
+        return active.get(0);
     }
 
     private ChargingPile requirePile(String pileId) {
