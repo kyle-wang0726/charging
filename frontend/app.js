@@ -24,10 +24,9 @@ const ZH = {
   modifyOk: "\u8bf7\u6c42\u5df2\u4fee\u6539",
   cancelOk: "\u8bf7\u6c42\u5df2\u53d6\u6d88",
   endOk: "\u5df2\u7ed3\u675f\u5145\u7535",
-  requestsRefreshed: "\u8ba2\u5355\u5217\u8868\u5df2\u5237\u65b0",
   requestSelected: "\u5df2\u9009\u4e2d\u8ba2\u5355 requestId=",
   autoSelectedRequest: "\u672a\u8f93\u5165requestId\uff0c\u5df2\u81ea\u52a8\u9009\u4e2d\u8ba2\u5355 requestId=",
-  billRefreshed: "\u8be6\u5355\u5df2\u5237\u65b0",
+  userRefreshed: "\u7528\u6237\u7aef\u6570\u636e\u5df2\u5237\u65b0",
   pilesRefreshed: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u5237\u65b0",
   strategyOk: "\u8c03\u5ea6\u7b56\u7565\u5df2\u66f4\u65b0",
   pileStateOk: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u66f4\u65b0",
@@ -457,14 +456,9 @@ bind("btnEndCharge", async () => {
   await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills(), refreshPiles()]);
 });
 
-bind("btnRequests", async () => {
-  await refreshRequests(false);
-  setMessage(userMessage, ZH.requestsRefreshed);
-});
-
-bind("btnBills", async () => {
-  await refreshBills();
-  setMessage(userMessage, ZH.billRefreshed);
+bind("btnUserRefresh", async () => {
+  await refreshUserPanelsIfLoggedIn();
+  setMessage(userMessage, ZH.userRefreshed);
 });
 
 bind("btnPiles", async () => {
