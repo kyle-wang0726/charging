@@ -200,6 +200,14 @@ th {
   font-weight: 600;
 }
 
+tbody tr:hover {
+  background: #f1f5f9;
+}
+
+.selected-row {
+  background: #e0f2fe;
+}
+
 .tag {
   display: inline-block;
   border-radius: 999px;

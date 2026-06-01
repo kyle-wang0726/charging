@@ -14,6 +14,7 @@ const ZH = {
   requestFailed: "\u8bf7\u6c42\u5931\u8d25",
   noActiveRequest: "\u5f53\u524d\u6ca1\u6709\u8fdb\u884c\u4e2d\u7684\u5145\u7535\u8bf7\u6c42\u3002",
   noRequests: "\u6682\u65e0\u8ba2\u5355\u8bb0\u5f55\u3002",
+  selectRequestHint: "\u8bf7\u5148\u5728\u300c\u6211\u7684\u8ba2\u5355\u300d\u4e2d\u9009\u62e9\u4e00\u6761\u8ba2\u5355\u3002",
   noBills: "\u6682\u65e0\u5145\u7535\u8be6\u5355\u3002",
   noPileData: "\u6682\u65e0\u5145\u7535\u6869\u6570\u636e\u3002",
   noReportData: "\u6682\u65e0\u62a5\u8868\u6570\u636e\u3002",
@@ -25,6 +26,7 @@ const ZH = {
   endOk: "\u5df2\u7ed3\u675f\u5145\u7535",
   queueRefreshed: "\u6392\u961f\u4fe1\u606f\u5df2\u5237\u65b0",
   requestsRefreshed: "\u8ba2\u5355\u5217\u8868\u5df2\u5237\u65b0",
+  requestSelected: "\u5df2\u9009\u4e2d\u8ba2\u5355 requestId=",
   billRefreshed: "\u8be6\u5355\u5df2\u5237\u65b0",
   pilesRefreshed: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u5237\u65b0",
   strategyOk: "\u8c03\u5ea6\u7b56\u7565\u5df2\u66f4\u65b0",
@@ -104,6 +106,10 @@ function requestIdValue() {
   return num;
 }
 
+function clearQueueInfoWithHint() {
+  queueInfoView.innerHTML = `<div>${ZH.selectRequestHint}</div>`;
+}
+
 async function request(path, options = {}) {
   const resp = await fetch(`${baseUrl()}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -174,8 +180,11 @@ function renderRequests(rows) {
     requestsView.innerHTML = `<div>${ZH.noRequests}</div>`;
     return;
   }
-  const html = rows.map((r) => `
-    <tr data-request-id="${r.requestId}">
+  const currentId = (byId("requestId")?.value || "").trim();
+  const html = rows.map((r) => {
+    const selectedClass = String(r.requestId) === currentId ? "selected-row" : "";
+    return `
+    <tr data-request-id="${r.requestId}" class="${selectedClass}">
       <td>${r.requestId}</td>
       <td>${r.queueNumber ?? "--"}</td>
       <td>${modeLabel(r.mode)}</td>
@@ -185,7 +194,8 @@ function renderRequests(rows) {
       <td>${r.pileId ?? "--"}</td>
       <td>${formatDateTime(r.enqueueTime)}</td>
     </tr>
-  `).join("");
+  `;
+  }).join("");
   requestsView.innerHTML = `
     <table>
       <thead>
@@ -199,10 +209,12 @@ function renderRequests(rows) {
 
   requestsView.querySelectorAll("tbody tr").forEach((tr) => {
     tr.style.cursor = "pointer";
-    tr.addEventListener("click", () => {
+    tr.addEventListener("click", async () => {
       const id = tr.getAttribute("data-request-id");
       byId("requestId").value = id;
-      setMessage(userMessage, `已选中订单 requestId=${id}`);
+      setMessage(userMessage, `${ZH.requestSelected}${id}`);
+      await refreshQueueInfo();
+      await refreshRequests(false);
     });
   });
 }
@@ -289,9 +301,11 @@ async function advanceMinutes(minutes) {
 
 async function refreshQueueInfo() {
   const reqId = requestIdValue();
-  const url = reqId == null
-    ? `/api/user/queue-info?userId=${userIdValue()}`
-    : `/api/user/queue-info?userId=${userIdValue()}&requestId=${reqId}`;
+  if (reqId == null) {
+    clearQueueInfoWithHint();
+    return;
+  }
+  const url = `/api/user/queue-info?userId=${userIdValue()}&requestId=${reqId}`;
   const res = await request(url);
   renderQueueInfo(res.data);
 }
@@ -349,7 +363,8 @@ bind("btnLogin", async () => {
   });
   byId("userId").value = res.data.userId;
   setMessage(userMessage, `${ZH.loginOk}${res.data.userId}`);
-  await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills()]);
+  await Promise.all([refreshRequests(false), refreshBills()]);
+  clearQueueInfoWithHint();
 });
 
 bind("btnSubmitReq", async () => {
@@ -485,9 +500,19 @@ bind("btnRefreshAll", async () => {
   setMessage(adminMessage, ZH.overviewRefreshed);
 }, "admin");
 
+byId("requestId").addEventListener("change", async () => {
+  try {
+    await refreshQueueInfo();
+    await refreshRequests(false);
+  } catch (e) {
+    setMessage(userMessage, e.message, true);
+  }
+});
+
 async function bootstrap() {
   try {
     await Promise.all([refreshSystemTime(), refreshPiles(), refreshReport()]);
+    clearQueueInfoWithHint();
   } catch (e) {
     setMessage(adminMessage, e.message, true);
   }
