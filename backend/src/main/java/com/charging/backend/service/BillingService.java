@@ -23,7 +23,7 @@ public class BillingService {
                                 SystemConfig config) {
         ChargeBill bill = new ChargeBill();
         bill.setBillNo(billNo);
-        bill.setGeneratedAt(LocalDateTime.now());
+        bill.setGeneratedAt(stop != null ? stop : LocalDateTime.now());
         bill.setUserId(userId);
         bill.setPileId(pileId);
         bill.setStartTime(start);

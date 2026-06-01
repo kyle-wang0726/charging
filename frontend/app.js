@@ -24,7 +24,6 @@ const ZH = {
   modifyOk: "\u8bf7\u6c42\u5df2\u4fee\u6539",
   cancelOk: "\u8bf7\u6c42\u5df2\u53d6\u6d88",
   endOk: "\u5df2\u7ed3\u675f\u5145\u7535",
-  queueRefreshed: "\u6392\u961f\u4fe1\u606f\u5df2\u5237\u65b0",
   requestsRefreshed: "\u8ba2\u5355\u5217\u8868\u5df2\u5237\u65b0",
   requestSelected: "\u5df2\u9009\u4e2d\u8ba2\u5355 requestId=",
   autoSelectedRequest: "\u672a\u8f93\u5165requestId\uff0c\u5df2\u81ea\u52a8\u9009\u4e2d\u8ba2\u5355 requestId=",
@@ -456,12 +455,6 @@ bind("btnEndCharge", async () => {
   });
   setMessage(userMessage, ZH.endOk);
   await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills(), refreshPiles()]);
-});
-
-bind("btnQueueInfo", async () => {
-  await ensureRequestIdSelected();
-  await refreshQueueInfo();
-  setMessage(userMessage, ZH.queueRefreshed);
 });
 
 bind("btnRequests", async () => {
