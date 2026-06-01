@@ -354,7 +354,23 @@ public class StationService {
         if (minutes <= 0) {
             throw new IllegalArgumentException("minutes must be greater than 0");
         }
-        systemNow = systemNow.plusMinutes(minutes);
+        LocalDateTime target = systemNow.plusMinutes(minutes);
+
+        // 先在当前时刻完成一次调度，确保可立即开始的请求进入充电态
+        refreshAndDispatch(systemNow);
+
+        // 在 [systemNow, target] 区间内按“下一辆车完成时间”逐事件推进
+        while (true) {
+            LocalDateTime nextFinish = findEarliestChargingFinishAtOrBefore(target);
+            if (nextFinish == null) {
+                break;
+            }
+            systemNow = nextFinish;
+            refreshAndDispatch(systemNow);
+        }
+
+        // 最后推进到目标时刻并收尾调度
+        systemNow = target;
         refreshAndDispatch(systemNow);
         return systemNow;
     }
@@ -947,6 +963,23 @@ public class StationService {
 
     private double round(double v) {
         return Math.round(v * 100.0) / 100.0;
+    }
+
+    private LocalDateTime findEarliestChargingFinishAtOrBefore(LocalDateTime upperBound) {
+        LocalDateTime earliest = null;
+        for (ChargingRequest req : requests.values()) {
+            if (req.getStatus() != RequestStatus.CHARGING || req.getExpectedFinishTime() == null) {
+                continue;
+            }
+            LocalDateTime finish = req.getExpectedFinishTime();
+            if (finish.isAfter(upperBound)) {
+                continue;
+            }
+            if (earliest == null || finish.isBefore(earliest)) {
+                earliest = finish;
+            }
+        }
+        return earliest;
     }
 
     private LocalDateTime now() {
