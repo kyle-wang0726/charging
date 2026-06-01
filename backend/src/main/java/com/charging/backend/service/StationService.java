@@ -56,6 +56,15 @@ public class StationService {
     }
 
     public synchronized UserAccount register(String username, String password, double batteryCapacityKwh) {
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("username cannot be empty");
+        }
+        if (password == null || password.trim().isEmpty()) {
+            throw new IllegalArgumentException("password cannot be empty");
+        }
+        if (batteryCapacityKwh <= 0) {
+            throw new IllegalArgumentException("battery capacity must be greater than 0");
+        }
         if (userByName.containsKey(username)) {
             throw new IllegalArgumentException("username already exists");
         }
@@ -77,7 +86,7 @@ public class StationService {
         refreshAndDispatch(now());
         validateUser(userId);
         if (waitingFast.size() + waitingSlow.size() >= config.getWaitingAreaSize()) {
-            throw new IllegalArgumentException("waiting area is full");
+            throw new IllegalArgumentException("waiting area is full, cannot create request");
         }
         ChargingRequest req = new ChargingRequest();
         req.setId(requestIdSeq.getAndIncrement());
@@ -174,6 +183,7 @@ public class StationService {
             throw ex;
         }
         Map<String, Object> data = new LinkedHashMap<>();
+        LocalDateTime[] estimated = estimateStartAndFinish(req, now());
         data.put("active", true);
         data.put("requestId", req.getId());
         data.put("status", req.getStatus());
@@ -183,8 +193,8 @@ public class StationService {
         data.put("pileId", req.getPileId());
         data.put("frontCars", countFrontCars(req));
         data.put("enqueueTime", req.getEnqueueTime());
-        data.put("startTime", req.getChargeStartTime());
-        data.put("expectedFinishTime", req.getExpectedFinishTime());
+        data.put("startTime", estimated[0]);
+        data.put("expectedFinishTime", estimated[1]);
         data.put("systemTime", now());
         data.put("multipleActiveRequests", findActiveRequestsByUser(userId).size() > 1);
         return data;
@@ -210,8 +220,9 @@ public class StationService {
             item.put("pileId", req.getPileId());
             item.put("frontCars", countFrontCars(req));
             item.put("enqueueTime", req.getEnqueueTime());
-            item.put("startTime", req.getChargeStartTime());
-            item.put("expectedFinishTime", req.getExpectedFinishTime());
+            LocalDateTime[] estimated = estimateStartAndFinish(req, now());
+            item.put("startTime", estimated[0]);
+            item.put("expectedFinishTime", estimated[1]);
             result.add(item);
         }
         return result;
@@ -457,14 +468,18 @@ public class StationService {
 
     private void refreshAndDispatch(LocalDateTime currentTime) {
         for (ChargingPile pile : piles.values()) {
-            if (pile.getQueueRequestIds().isEmpty()) {
-                continue;
-            }
-            Long firstId = pile.getQueueRequestIds().get(0);
-            ChargingRequest first = requests.get(firstId);
-            if (first != null && first.getStatus() == RequestStatus.CHARGING
-                    && first.getExpectedFinishTime() != null
-                    && !first.getExpectedFinishTime().isAfter(currentTime)) {
+            while (true) {
+                if (pile.getQueueRequestIds().isEmpty()) {
+                    break;
+                }
+                startFirstIfNeeded(pile, currentTime);
+                Long firstId = pile.getQueueRequestIds().get(0);
+                ChargingRequest first = requests.get(firstId);
+                if (first == null || first.getStatus() != RequestStatus.CHARGING
+                        || first.getExpectedFinishTime() == null
+                        || first.getExpectedFinishTime().isAfter(currentTime)) {
+                    break;
+                }
                 buildAndStoreBill(first, pile, first.getExpectedFinishTime());
                 first.setStatus(RequestStatus.COMPLETED);
                 pile.getQueueRequestIds().remove(0);
@@ -743,6 +758,162 @@ public class StationService {
             }
         }
         return 0;
+    }
+
+    private LocalDateTime[] estimateStartAndFinish(ChargingRequest req, LocalDateTime currentTime) {
+        if (req == null) {
+            return new LocalDateTime[]{null, null};
+        }
+        if (req.getStatus() == RequestStatus.CHARGING) {
+            LocalDateTime start = req.getChargeStartTime() == null ? currentTime : req.getChargeStartTime();
+            LocalDateTime finish = req.getExpectedFinishTime() == null
+                    ? start.plusSeconds(durationSeconds(req))
+                    : req.getExpectedFinishTime();
+            return new LocalDateTime[]{start, finish};
+        }
+        if (req.getStatus() == RequestStatus.QUEUED) {
+            return estimateQueuedStartAndFinish(req, currentTime);
+        }
+        if (req.getStatus() == RequestStatus.WAITING_AREA) {
+            return estimateWaitingStartAndFinish(req, currentTime);
+        }
+        return new LocalDateTime[]{req.getChargeStartTime(), req.getExpectedFinishTime()};
+    }
+
+    private LocalDateTime[] estimateQueuedStartAndFinish(ChargingRequest target, LocalDateTime currentTime) {
+        if (target.getPileId() == null) {
+            return new LocalDateTime[]{null, null};
+        }
+        ChargingPile pile = piles.get(target.getPileId());
+        if (pile == null) {
+            return new LocalDateTime[]{null, null};
+        }
+        LocalDateTime cursor = currentTime;
+        for (Long id : pile.getQueueRequestIds()) {
+            ChargingRequest req = requests.get(id);
+            if (req == null) {
+                continue;
+            }
+            if (req.getStatus() == RequestStatus.CHARGING) {
+                LocalDateTime start = req.getChargeStartTime() == null ? currentTime : req.getChargeStartTime();
+                LocalDateTime finish = req.getExpectedFinishTime() == null
+                        ? start.plusSeconds(durationSeconds(req))
+                        : req.getExpectedFinishTime();
+                if (finish.isBefore(currentTime)) {
+                    finish = currentTime;
+                }
+                if (Objects.equals(req.getId(), target.getId())) {
+                    return new LocalDateTime[]{start, finish};
+                }
+                cursor = finish;
+                continue;
+            }
+            LocalDateTime start = cursor;
+            LocalDateTime finish = start.plusSeconds(durationSeconds(req));
+            if (Objects.equals(req.getId(), target.getId())) {
+                return new LocalDateTime[]{start, finish};
+            }
+            cursor = finish;
+        }
+        return new LocalDateTime[]{null, null};
+    }
+
+    private LocalDateTime[] estimateWaitingStartAndFinish(ChargingRequest target, LocalDateTime currentTime) {
+        ChargeMode mode = target.getMode();
+        List<ChargingPile> workingPiles = piles.values().stream()
+                .filter(p -> p.getMode() == mode && p.getState() == PileState.WORKING)
+                .toList();
+        if (workingPiles.isEmpty()) {
+            return new LocalDateTime[]{null, null};
+        }
+
+        Map<String, LocalDateTime> tailByPile = new LinkedHashMap<>();
+        for (ChargingPile pile : workingPiles) {
+            tailByPile.put(pile.getId(), estimatePileTailFinish(pile, currentTime));
+        }
+
+        List<Long> priorityList = faultPriorityByMode(mode);
+        int priorityIndex = priorityList.indexOf(target.getId());
+        int stepsBeforeTarget;
+        if (priorityIndex >= 0) {
+            stepsBeforeTarget = priorityIndex;
+        } else {
+            int waitingIndex = waitingListByMode(mode).indexOf(target.getId());
+            if (waitingIndex < 0) {
+                waitingIndex = 0;
+            }
+            stepsBeforeTarget = priorityList.size() + waitingIndex;
+        }
+        long avgSecs = Math.max(1L, Math.round(averageWaitingDurationSeconds(mode)));
+
+        for (int i = 0; i <= stepsBeforeTarget; i++) {
+            boolean isTarget = i == stepsBeforeTarget;
+            long duration = isTarget ? durationSeconds(target) : avgSecs;
+
+            String bestPile = null;
+            LocalDateTime bestStart = null;
+            for (Map.Entry<String, LocalDateTime> entry : tailByPile.entrySet()) {
+                if (bestStart == null || entry.getValue().isBefore(bestStart)) {
+                    bestStart = entry.getValue();
+                    bestPile = entry.getKey();
+                }
+            }
+            if (bestPile == null || bestStart == null) {
+                return new LocalDateTime[]{null, null};
+            }
+            LocalDateTime finish = bestStart.plusSeconds(duration);
+            tailByPile.put(bestPile, finish);
+            if (isTarget) {
+                return new LocalDateTime[]{bestStart, finish};
+            }
+        }
+        return new LocalDateTime[]{null, null};
+    }
+
+    private LocalDateTime estimatePileTailFinish(ChargingPile pile, LocalDateTime currentTime) {
+        LocalDateTime cursor = currentTime;
+        for (Long id : pile.getQueueRequestIds()) {
+            ChargingRequest req = requests.get(id);
+            if (req == null) {
+                continue;
+            }
+            if (req.getStatus() == RequestStatus.CHARGING) {
+                LocalDateTime finish = req.getExpectedFinishTime() == null
+                        ? cursor.plusSeconds(durationSeconds(req))
+                        : req.getExpectedFinishTime();
+                if (finish.isBefore(currentTime)) {
+                    finish = currentTime;
+                }
+                cursor = finish;
+            } else {
+                cursor = cursor.plusSeconds(durationSeconds(req));
+            }
+        }
+        return cursor;
+    }
+
+    private long durationSeconds(ChargingRequest req) {
+        if (req == null) {
+            return 1L;
+        }
+        double power = powerByMode(req.getMode());
+        double hours = req.getRequestedKwh() / power;
+        return Math.max(1L, Math.round(hours * 3600));
+    }
+
+    private double averageWaitingDurationSeconds(ChargeMode mode) {
+        double sum = 0;
+        int count = 0;
+        for (ChargingRequest req : requests.values()) {
+            if (req.getMode() == mode && isActive(req)) {
+                sum += durationSeconds(req);
+                count++;
+            }
+        }
+        if (count == 0) {
+            return mode == ChargeMode.FAST ? 3600 : 7200;
+        }
+        return sum / count;
     }
 
     private int queueOrder(Long requestId) {
