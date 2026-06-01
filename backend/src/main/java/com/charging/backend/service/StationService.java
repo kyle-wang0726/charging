@@ -387,16 +387,29 @@ public class StationService {
 
     private void handlePileFault(ChargingPile faultPile) {
         faultPile.setState(PileState.FAULT);
+        List<Long> impacted = new ArrayList<>();
         if (!faultPile.getQueueRequestIds().isEmpty()) {
             Long firstId = faultPile.getQueueRequestIds().get(0);
             ChargingRequest chargingReq = requests.get(firstId);
             if (chargingReq != null && chargingReq.getStatus() == RequestStatus.CHARGING) {
-                buildAndStoreBill(chargingReq, faultPile, now());
-                chargingReq.setStatus(RequestStatus.COMPLETED);
+                ChargeBill partial = buildAndStoreBill(chargingReq, faultPile, now());
+                double remaining = round(Math.max(0.0, chargingReq.getRequestedKwh() - partial.getChargedKwh()));
                 faultPile.getQueueRequestIds().remove(0);
+                if (remaining > 0.0) {
+                    chargingReq.setRequestedKwh(remaining);
+                    chargingReq.setStatus(RequestStatus.WAITING_AREA);
+                    chargingReq.setPileId(null);
+                    chargingReq.setChargeStartTime(null);
+                    chargingReq.setChargeStopTime(null);
+                    chargingReq.setExpectedFinishTime(null);
+                    impacted.add(chargingReq.getId());
+                } else {
+                    chargingReq.setStatus(RequestStatus.COMPLETED);
+                    chargingReq.setPileId(null);
+                }
             }
         }
-        List<Long> impacted = new ArrayList<>(faultPile.getQueueRequestIds());
+        impacted.addAll(faultPile.getQueueRequestIds());
         faultPile.getQueueRequestIds().clear();
         if (impacted.isEmpty()) {
             return;

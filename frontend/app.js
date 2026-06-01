@@ -292,11 +292,7 @@ async function advanceMinutes(minutes) {
   systemTimeText.textContent = formatDateTime(res.data.systemTime);
   setMessage(adminMessage, `${ZH.advanced}${minutes}${ZH.advancedSuffix}`);
   await refreshPiles();
-  try {
-    await refreshQueueInfo();
-  } catch (e) {
-    // ignore if user not logged in
-  }
+  await refreshUserPanelsIfLoggedIn();
 }
 
 async function refreshQueueInfo() {
@@ -329,6 +325,18 @@ async function refreshReport() {
   const period = byId("reportPeriod").value;
   const res = await request(`/api/admin/report?period=${period}`);
   renderReport(res.data);
+}
+
+async function refreshUserPanelsIfLoggedIn() {
+  const userId = (byId("userId")?.value || "").trim();
+  if (!userId) {
+    return;
+  }
+  await Promise.all([
+    refreshRequests(false),
+    refreshQueueInfo(),
+    refreshBills(),
+  ]);
 }
 
 function bind(id, fn, scope = "user") {
@@ -497,6 +505,7 @@ bind("btnAdvanceCustom", async () => {
 
 bind("btnRefreshAll", async () => {
   await Promise.all([refreshSystemTime(), refreshPiles(), refreshReport()]);
+  await refreshUserPanelsIfLoggedIn();
   setMessage(adminMessage, ZH.overviewRefreshed);
 }, "admin");
 
