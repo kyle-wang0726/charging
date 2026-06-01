@@ -4,6 +4,7 @@ const userMessage = byId("userMessage");
 const adminMessage = byId("adminMessage");
 const queueInfoView = byId("queueInfoView");
 const billsView = byId("billsView");
+const requestsView = byId("requestsView");
 const pileView = byId("pileView");
 const reportView = byId("reportView");
 const systemTimeText = byId("systemTimeText");
@@ -12,6 +13,7 @@ const ZH = {
   needLogin: "\u8bf7\u5148\u767b\u5f55",
   requestFailed: "\u8bf7\u6c42\u5931\u8d25",
   noActiveRequest: "\u5f53\u524d\u6ca1\u6709\u8fdb\u884c\u4e2d\u7684\u5145\u7535\u8bf7\u6c42\u3002",
+  noRequests: "\u6682\u65e0\u8ba2\u5355\u8bb0\u5f55\u3002",
   noBills: "\u6682\u65e0\u5145\u7535\u8be6\u5355\u3002",
   noPileData: "\u6682\u65e0\u5145\u7535\u6869\u6570\u636e\u3002",
   noReportData: "\u6682\u65e0\u62a5\u8868\u6570\u636e\u3002",
@@ -22,6 +24,7 @@ const ZH = {
   cancelOk: "\u8bf7\u6c42\u5df2\u53d6\u6d88",
   endOk: "\u5df2\u7ed3\u675f\u5145\u7535",
   queueRefreshed: "\u6392\u961f\u4fe1\u606f\u5df2\u5237\u65b0",
+  requestsRefreshed: "\u8ba2\u5355\u5217\u8868\u5df2\u5237\u65b0",
   billRefreshed: "\u8be6\u5355\u5df2\u5237\u65b0",
   pilesRefreshed: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u5237\u65b0",
   strategyOk: "\u8c03\u5ea6\u7b56\u7565\u5df2\u66f4\u65b0",
@@ -91,6 +94,16 @@ function userIdValue() {
   return Number(userId);
 }
 
+function requestIdValue() {
+  const val = (byId("requestId")?.value || "").trim();
+  if (!val) return null;
+  const num = Number(val);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw new Error("requestId must be a positive number");
+  }
+  return num;
+}
+
 async function request(path, options = {}) {
   const resp = await fetch(`${baseUrl()}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -154,6 +167,44 @@ function renderBills(bills) {
       <tbody>${rows}</tbody>
     </table>
   `;
+}
+
+function renderRequests(rows) {
+  if (!rows || rows.length === 0) {
+    requestsView.innerHTML = `<div>${ZH.noRequests}</div>`;
+    return;
+  }
+  const html = rows.map((r) => `
+    <tr data-request-id="${r.requestId}">
+      <td>${r.requestId}</td>
+      <td>${r.queueNumber ?? "--"}</td>
+      <td>${modeLabel(r.mode)}</td>
+      <td><span class="tag">${statusLabel(r.status)}</span></td>
+      <td>${r.requestKwh}</td>
+      <td>${r.frontCars ?? 0}</td>
+      <td>${r.pileId ?? "--"}</td>
+      <td>${formatDateTime(r.enqueueTime)}</td>
+    </tr>
+  `).join("");
+  requestsView.innerHTML = `
+    <table>
+      <thead>
+      <tr>
+        <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>电量(kWh)</th><th>前车</th><th>充电桩</th><th>入队时间</th>
+      </tr>
+      </thead>
+      <tbody>${html}</tbody>
+    </table>
+  `;
+
+  requestsView.querySelectorAll("tbody tr").forEach((tr) => {
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", () => {
+      const id = tr.getAttribute("data-request-id");
+      byId("requestId").value = id;
+      setMessage(userMessage, `已选中订单 requestId=${id}`);
+    });
+  });
 }
 
 function renderPiles(piles) {
@@ -237,8 +288,17 @@ async function advanceMinutes(minutes) {
 }
 
 async function refreshQueueInfo() {
-  const res = await request(`/api/user/queue-info?userId=${userIdValue()}`);
+  const reqId = requestIdValue();
+  const url = reqId == null
+    ? `/api/user/queue-info?userId=${userIdValue()}`
+    : `/api/user/queue-info?userId=${userIdValue()}&requestId=${reqId}`;
+  const res = await request(url);
   renderQueueInfo(res.data);
+}
+
+async function refreshRequests(includeFinished = false) {
+  const res = await request(`/api/user/requests?userId=${userIdValue()}&includeFinished=${includeFinished}`);
+  renderRequests(res.data);
 }
 
 async function refreshBills() {
@@ -289,11 +349,11 @@ bind("btnLogin", async () => {
   });
   byId("userId").value = res.data.userId;
   setMessage(userMessage, `${ZH.loginOk}${res.data.userId}`);
-  await Promise.all([refreshQueueInfo(), refreshBills()]);
+  await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills()]);
 });
 
 bind("btnSubmitReq", async () => {
-  await request("/api/user/request", {
+  const res = await request("/api/user/request", {
     method: "POST",
     body: JSON.stringify({
       userId: userIdValue(),
@@ -301,41 +361,59 @@ bind("btnSubmitReq", async () => {
       requestKwh: Number(byId("requestKwh").value),
     }),
   });
+  if (res?.data?.requestId) {
+    byId("requestId").value = res.data.requestId;
+  }
   setMessage(userMessage, ZH.submitOk);
-  await refreshQueueInfo();
+  await Promise.all([refreshRequests(false), refreshQueueInfo()]);
 });
 
 bind("btnModifyReq", async () => {
+  const reqId = requestIdValue();
+  const payload = {
+    userId: userIdValue(),
+    mode: byId("mode").value,
+    requestKwh: Number(byId("requestKwh").value),
+  };
+  if (reqId != null) payload.requestId = reqId;
   await request("/api/user/request", {
     method: "PUT",
-    body: JSON.stringify({
-      userId: userIdValue(),
-      mode: byId("mode").value,
-      requestKwh: Number(byId("requestKwh").value),
-    }),
+    body: JSON.stringify(payload),
   });
   setMessage(userMessage, ZH.modifyOk);
-  await refreshQueueInfo();
+  await Promise.all([refreshRequests(false), refreshQueueInfo()]);
 });
 
 bind("btnCancelReq", async () => {
-  await request(`/api/user/request?userId=${userIdValue()}`, { method: "DELETE" });
+  const reqId = requestIdValue();
+  const url = reqId == null
+    ? `/api/user/request?userId=${userIdValue()}`
+    : `/api/user/request?userId=${userIdValue()}&requestId=${reqId}`;
+  await request(url, { method: "DELETE" });
   setMessage(userMessage, ZH.cancelOk);
-  await refreshQueueInfo();
+  await Promise.all([refreshRequests(false), refreshQueueInfo()]);
 });
 
 bind("btnEndCharge", async () => {
+  const reqId = requestIdValue();
+  const payload = { userId: userIdValue() };
+  if (reqId != null) payload.requestId = reqId;
   await request("/api/user/end", {
     method: "POST",
-    body: JSON.stringify({ userId: userIdValue() }),
+    body: JSON.stringify(payload),
   });
   setMessage(userMessage, ZH.endOk);
-  await Promise.all([refreshQueueInfo(), refreshBills(), refreshPiles()]);
+  await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills(), refreshPiles()]);
 });
 
 bind("btnQueueInfo", async () => {
   await refreshQueueInfo();
   setMessage(userMessage, ZH.queueRefreshed);
+});
+
+bind("btnRequests", async () => {
+  await refreshRequests(false);
+  setMessage(userMessage, ZH.requestsRefreshed);
 });
 
 bind("btnBills", async () => {

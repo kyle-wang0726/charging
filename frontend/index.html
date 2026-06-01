@@ -54,16 +54,21 @@
           <option value="SLOW">慢充</option>
         </select>
         <input id="requestKwh" placeholder="请求电量(kWh)" value="30"/>
+        <input id="requestId" placeholder="订单ID（requestId）"/>
         <button id="btnSubmitReq">提交请求</button>
-        <button id="btnModifyReq" class="btn-secondary">修改请求</button>
       </div>
       <div class="form-grid cols-4">
+        <button id="btnModifyReq" class="btn-secondary">修改请求</button>
         <button id="btnCancelReq" class="btn-danger">取消请求</button>
         <button id="btnEndCharge" class="btn-secondary">结束充电</button>
         <button id="btnQueueInfo" class="btn-secondary">查看排队信息</button>
+      </div>
+      <div class="form-grid cols-4">
+        <button id="btnRequests" class="btn-secondary">我的订单</button>
         <button id="btnBills" class="btn-secondary">查看充电详单</button>
       </div>
       <div id="userMessage" class="message">就绪</div>
+      <div id="requestsView" class="data-box"></div>
       <div id="queueInfoView" class="data-box"></div>
       <div id="billsView" class="data-box"></div>
     </section>
