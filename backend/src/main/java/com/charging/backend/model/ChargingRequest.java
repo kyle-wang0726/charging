@@ -6,6 +6,7 @@ public class ChargingRequest {
     private Long id;
     private Long userId;
     private ChargeMode mode;
+    private double batteryCapacityKwh;
     private double requestedKwh;
     private String queueNumber;
     private RequestStatus status;
@@ -37,6 +38,14 @@ public class ChargingRequest {
 
     public void setMode(ChargeMode mode) {
         this.mode = mode;
+    }
+
+    public double getBatteryCapacityKwh() {
+        return batteryCapacityKwh;
+    }
+
+    public void setBatteryCapacityKwh(double batteryCapacityKwh) {
+        this.batteryCapacityKwh = batteryCapacityKwh;
     }
 
     public double getRequestedKwh() {

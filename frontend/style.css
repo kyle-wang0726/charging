@@ -103,6 +103,10 @@ body {
   grid-template-columns: repeat(4, minmax(140px, 1fr));
 }
 
+.form-grid.cols-5 {
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+}
+
 .form-grid.cols-3 {
   grid-template-columns: repeat(3, minmax(160px, 1fr));
 }
@@ -237,7 +241,8 @@ tbody tr:hover {
   }
 
   .form-grid.cols-3,
-  .form-grid.cols-4 {
+  .form-grid.cols-4,
+  .form-grid.cols-5 {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
 }
@@ -245,7 +250,8 @@ tbody tr:hover {
 @media (max-width: 560px) {
   .form-grid,
   .form-grid.cols-3,
-  .form-grid.cols-4 {
+  .form-grid.cols-4,
+  .form-grid.cols-5 {
     grid-template-columns: 1fr;
   }
 }

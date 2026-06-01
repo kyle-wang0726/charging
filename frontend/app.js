@@ -10,32 +10,31 @@ const reportView = byId("reportView");
 const systemTimeText = byId("systemTimeText");
 
 const ZH = {
-  needLogin: "\u8bf7\u5148\u767b\u5f55",
-  requestFailed: "\u8bf7\u6c42\u5931\u8d25",
-  noActiveRequest: "\u5f53\u524d\u6ca1\u6709\u8fdb\u884c\u4e2d\u7684\u5145\u7535\u8bf7\u6c42\u3002",
-  noRequests: "\u6682\u65e0\u8ba2\u5355\u8bb0\u5f55\u3002",
-  selectRequestHint: "\u8bf7\u5148\u5728\u300c\u6211\u7684\u8ba2\u5355\u300d\u4e2d\u9009\u62e9\u4e00\u6761\u8ba2\u5355\u3002",
-  noBills: "\u6682\u65e0\u5145\u7535\u8be6\u5355\u3002",
-  noPileData: "\u6682\u65e0\u5145\u7535\u6869\u6570\u636e\u3002",
-  noReportData: "\u6682\u65e0\u62a5\u8868\u6570\u636e\u3002",
-  registerOk: "\u6ce8\u518c\u6210\u529f",
-  loginOk: "\u767b\u5f55\u6210\u529f\uff0c\u5f53\u524d\u7528\u6237ID\uff1a",
-  submitOk: "\u8bf7\u6c42\u5df2\u63d0\u4ea4",
-  modifyOk: "\u8bf7\u6c42\u5df2\u4fee\u6539",
-  cancelOk: "\u8bf7\u6c42\u5df2\u53d6\u6d88",
-  endOk: "\u5df2\u7ed3\u675f\u5145\u7535",
-  requestSelected: "\u5df2\u9009\u4e2d\u8ba2\u5355 requestId=",
-  autoSelectedRequest: "\u672a\u8f93\u5165requestId\uff0c\u5df2\u81ea\u52a8\u9009\u4e2d\u8ba2\u5355 requestId=",
-  userRefreshed: "\u7528\u6237\u7aef\u6570\u636e\u5df2\u5237\u65b0",
-  pilesRefreshed: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u5237\u65b0",
-  strategyOk: "\u8c03\u5ea6\u7b56\u7565\u5df2\u66f4\u65b0",
-  pileStateOk: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u66f4\u65b0",
-  configOk: "\u7cfb\u7edf\u914d\u7f6e\u5df2\u66f4\u65b0",
-  reportRefreshed: "\u62a5\u8868\u5df2\u5237\u65b0",
-  overviewRefreshed: "\u603b\u89c8\u5df2\u5237\u65b0",
-  advanced: "\u7cfb\u7edf\u65f6\u95f4\u5df2\u63a8\u8fdb ",
-  advancedSuffix: " \u5206\u949f",
-  badMinutes: "\u5206\u949f\u6570\u5fc5\u987b\u5927\u4e8e0",
+  needLogin: "请先登录",
+  requestFailed: "请求失败",
+  noActiveRequest: "当前没有进行中的充电请求。",
+  noRequests: "暂无订单记录。",
+  selectRequestHint: "请先在“我的订单”中选择一条订单。",
+  noBills: "暂无充电详单。",
+  noPileData: "暂无充电桩数据。",
+  noReportData: "暂无报表数据。",
+  registerOk: "注册成功",
+  loginOk: "登录成功，当前用户ID：",
+  submitOk: "请求已提交",
+  modifyOk: "请求已修改",
+  cancelOk: "请求已取消",
+  endOk: "已结束充电",
+  requestSelected: "已选中订单 requestId=",
+  userRefreshed: "用户端数据已刷新",
+  pilesRefreshed: "充电桩状态已刷新",
+  strategyOk: "调度策略已更新",
+  pileStateOk: "充电桩状态已更新",
+  configOk: "系统配置已更新",
+  reportRefreshed: "报表已刷新",
+  overviewRefreshed: "总览已刷新",
+  advanced: "系统时间已推进 ",
+  advancedSuffix: " 分钟",
+  badMinutes: "分钟数必须大于0",
 };
 
 function baseUrl() {
@@ -53,27 +52,27 @@ function formatDateTime(value) {
 }
 
 function modeLabel(mode) {
-  if (mode === "FAST") return "\u5feb\u5145";
-  if (mode === "SLOW") return "\u6162\u5145";
+  if (mode === "FAST") return "快充";
+  if (mode === "SLOW") return "慢充";
   return mode || "--";
 }
 
 function statusLabel(status) {
   const map = {
-    WAITING_AREA: "\u7b49\u5019\u533a",
-    QUEUED: "\u5145\u7535\u533a\u6392\u961f",
-    CHARGING: "\u5145\u7535\u4e2d",
-    COMPLETED: "\u5df2\u5b8c\u6210",
-    CANCELED: "\u5df2\u53d6\u6d88",
+    WAITING_AREA: "等候区",
+    QUEUED: "充电区排队",
+    CHARGING: "充电中",
+    COMPLETED: "已完成",
+    CANCELED: "已取消",
   };
   return map[status] || status || "--";
 }
 
 function queueAreaLabel(area) {
   const map = {
-    WAITING_AREA: "\u7b49\u5019\u533a",
-    FAULT_WAITING: "\u6545\u969c\u7b49\u5019\u961f\u5217",
-    CHARGING_AREA: "\u5145\u7535\u533a",
+    WAITING_AREA: "等候区",
+    FAULT_WAITING: "故障等候队列",
+    CHARGING_AREA: "充电区",
     NONE: "--",
   };
   return map[area] || area || "--";
@@ -81,18 +80,18 @@ function queueAreaLabel(area) {
 
 function pileStateLabel(state) {
   const map = {
-    WORKING: "\u5de5\u4f5c\u4e2d",
-    SHUTDOWN: "\u5df2\u5173\u95ed",
-    FAULT: "\u6545\u969c",
+    WORKING: "工作中",
+    SHUTDOWN: "已关闭",
+    FAULT: "故障",
   };
   return map[state] || state || "--";
 }
 
 function periodLabel(period) {
   const map = {
-    DAY: "\u65e5\u62a5",
-    WEEK: "\u5468\u62a5",
-    MONTH: "\u6708\u62a5",
+    DAY: "日报",
+    WEEK: "周报",
+    MONTH: "月报",
   };
   return map[period] || period || "--";
 }
@@ -110,7 +109,7 @@ function requestIdValue() {
   if (!val) return null;
   const num = Number(val);
   if (!Number.isFinite(num) || num <= 0) {
-    throw new Error("requestId must be a positive number");
+    throw new Error("requestId 必须是正数");
   }
   return num;
 }
@@ -138,17 +137,18 @@ function renderQueueInfo(data) {
   }
   queueInfoView.innerHTML = `
     <div class="kvs">
-      <div class="k">\u8bf7\u6c42ID</div><div class="v">${data.requestId ?? "--"}</div>
-      <div class="k">\u6392\u961f\u53f7</div><div class="v">${data.queueNumber ?? "--"}</div>
-      <div class="k">\u5145\u7535\u6a21\u5f0f</div><div class="v">${modeLabel(data.mode)}</div>
-      <div class="k">\u5f53\u524d\u72b6\u6001</div><div class="v"><span class="tag">${statusLabel(data.status)}</span></div>
-      <div class="k">\u6240\u5728\u533a\u57df</div><div class="v">${queueAreaLabel(data.queueArea)}</div>
-      <div class="k">\u8bf7\u6c42\u7535\u91cf</div><div class="v">${data.requestKwh ?? 0} kWh</div>
-      <div class="k">\u524d\u8f66\u6570\u91cf</div><div class="v">${data.frontCars ?? 0}</div>
-      <div class="k">\u5206\u914d\u5145\u7535\u6869</div><div class="v">${data.pileId ?? "--"}</div>
-      <div class="k">\u5165\u961f\u65f6\u95f4</div><div class="v">${formatDateTime(data.enqueueTime)}</div>
-      <div class="k">\u5f00\u59cb\u5145\u7535</div><div class="v">${formatDateTime(data.startTime)}</div>
-      <div class="k">\u9884\u8ba1\u5b8c\u6210</div><div class="v">${formatDateTime(data.expectedFinishTime)}</div>
+      <div class="k">请求ID</div><div class="v">${data.requestId ?? "--"}</div>
+      <div class="k">排队号</div><div class="v">${data.queueNumber ?? "--"}</div>
+      <div class="k">充电模式</div><div class="v">${modeLabel(data.mode)}</div>
+      <div class="k">当前状态</div><div class="v"><span class="tag">${statusLabel(data.status)}</span></div>
+      <div class="k">所在区域</div><div class="v">${queueAreaLabel(data.queueArea)}</div>
+      <div class="k">车辆电池容量</div><div class="v">${data.batteryCapacityKwh ?? 0} kWh</div>
+      <div class="k">请求电量</div><div class="v">${data.requestKwh ?? 0} kWh</div>
+      <div class="k">前车数量</div><div class="v">${data.frontCars ?? 0}</div>
+      <div class="k">分配充电桩</div><div class="v">${data.pileId ?? "--"}</div>
+      <div class="k">入队时间</div><div class="v">${formatDateTime(data.enqueueTime)}</div>
+      <div class="k">开始充电</div><div class="v">${formatDateTime(data.startTime)}</div>
+      <div class="k">预计完成</div><div class="v">${formatDateTime(data.expectedFinishTime)}</div>
     </div>
   `;
 }
@@ -176,8 +176,8 @@ function renderBills(bills) {
     <table>
       <thead>
       <tr>
-        <th>\u8be6\u5355\u53f7</th><th>\u751f\u6210\u65f6\u95f4</th><th>\u5145\u7535\u6869</th><th>\u7535\u91cf</th><th>\u65f6\u957f</th>
-        <th>\u5f00\u59cb\u65f6\u95f4</th><th>\u7ed3\u675f\u65f6\u95f4</th><th>\u5145\u7535\u8d39</th><th>\u670d\u52a1\u8d39</th><th>\u603b\u8d39\u7528</th>
+        <th>详单号</th><th>生成时间</th><th>充电桩</th><th>电量</th><th>时长</th>
+        <th>开始时间</th><th>结束时间</th><th>充电费</th><th>服务费</th><th>总费用</th>
       </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -188,6 +188,7 @@ function renderBills(bills) {
 function renderRequests(rows) {
   if (!rows || rows.length === 0) {
     requestsView.innerHTML = `<div>${ZH.noRequests}</div>`;
+    clearQueueInfoWithHint();
     return;
   }
   const currentId = (byId("requestId")?.value || "").trim();
@@ -200,6 +201,7 @@ function renderRequests(rows) {
       <td>${modeLabel(r.mode)}</td>
       <td><span class="tag">${statusLabel(r.status)}</span></td>
       <td>${queueAreaLabel(r.queueArea)}</td>
+      <td>${r.batteryCapacityKwh ?? 0}</td>
       <td>${r.requestKwh}</td>
       <td>${r.frontCars ?? 0}</td>
       <td>${r.pileId ?? "--"}</td>
@@ -211,7 +213,8 @@ function renderRequests(rows) {
     <table>
       <thead>
       <tr>
-        <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>区域</th><th>电量(kWh)</th><th>前车</th><th>充电桩</th><th>入队时间</th>
+        <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>区域</th>
+        <th>电池容量(kWh)</th><th>电量(kWh)</th><th>前车</th><th>充电桩</th><th>入队时间</th>
       </tr>
       </thead>
       <tbody>${html}</tbody>
@@ -223,6 +226,12 @@ function renderRequests(rows) {
     tr.addEventListener("click", async () => {
       const id = tr.getAttribute("data-request-id");
       byId("requestId").value = id;
+      const row = rows.find((x) => String(x.requestId) === String(id));
+      if (row) {
+        if (row.mode) byId("mode").value = row.mode;
+        if (row.requestKwh != null) byId("requestKwh").value = row.requestKwh;
+        if (row.batteryCapacityKwh != null) byId("batteryCapacityKwh").value = row.batteryCapacityKwh;
+      }
       setMessage(userMessage, `${ZH.requestSelected}${id}`);
       await refreshQueueInfo();
       await refreshRequests(false);
@@ -244,15 +253,21 @@ function renderPiles(piles) {
       <td>${p.totalChargeHours}</td>
       <td>${p.totalChargeKwh}</td>
       <td>${(p.queueCars || []).length}</td>
-      <td>${(p.queueCars || []).map(c => `${c.queueNumber} / \u7528\u6237${c.userId} / ${statusLabel(c.status)}`).join("<br/>") || "--"}</td>
+      <td>${(p.queueCars || []).map((c) => `
+        <div>
+          请求${c.requestId}（${c.queueNumber}）<br/>
+          用户${c.userId}，电池${c.batteryCapacityKwh}kWh，请求${c.requestKwh}kWh<br/>
+          状态：${statusLabel(c.status)}，已排队${c.queuedMinutes}分钟
+        </div>
+      `).join("<hr/>") || "--"}</td>
     </tr>
   `).join("");
   pileView.innerHTML = `
     <table>
       <thead>
       <tr>
-        <th>\u6869\u7f16\u53f7</th><th>\u7c7b\u578b</th><th>\u72b6\u6001</th><th>\u7d2f\u8ba1\u6b21\u6570</th>
-        <th>\u7d2f\u8ba1\u65f6\u957f(h)</th><th>\u7d2f\u8ba1\u7535\u91cf(kWh)</th><th>\u6392\u961f\u6570</th><th>\u6392\u961f\u8be6\u60c5</th>
+        <th>桩编号</th><th>类型</th><th>状态</th><th>累计次数</th>
+        <th>累计时长(h)</th><th>累计电量(kWh)</th><th>排队数</th><th>等候服务车辆信息</th>
       </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -281,8 +296,8 @@ function renderReport(rows) {
     <table>
       <thead>
       <tr>
-        <th>\u7edf\u8ba1\u5468\u671f</th><th>\u5145\u7535\u6869</th><th>\u7d2f\u8ba1\u6b21\u6570</th><th>\u7d2f\u8ba1\u65f6\u957f(h)</th>
-        <th>\u7d2f\u8ba1\u7535\u91cf(kWh)</th><th>\u7d2f\u8ba1\u5145\u7535\u8d39</th><th>\u7d2f\u8ba1\u670d\u52a1\u8d39</th><th>\u7d2f\u8ba1\u603b\u8d39\u7528</th>
+        <th>统计周期</th><th>充电桩</th><th>累计次数</th><th>累计时长(h)</th>
+        <th>累计电量(kWh)</th><th>累计充电费</th><th>累计服务费</th><th>累计总费用</th>
       </tr>
       </thead>
       <tbody>${html}</tbody>
@@ -341,29 +356,9 @@ async function refreshReport() {
 
 async function refreshUserPanelsIfLoggedIn() {
   const userId = (byId("userId")?.value || "").trim();
-  if (!userId) {
-    return;
-  }
+  if (!userId) return;
   await refreshRequests(false);
-  await Promise.all([
-    refreshQueueInfo(),
-    refreshBills(),
-  ]);
-}
-
-async function ensureRequestIdSelected() {
-  const current = requestIdValue();
-  if (current != null) {
-    return current;
-  }
-  const rows = await refreshRequests(false);
-  if (!rows || rows.length === 0) {
-    throw new Error(ZH.noRequests);
-  }
-  const first = rows.find((r) => r.status === "WAITING_AREA" || r.status === "QUEUED" || r.status === "CHARGING") || rows[0];
-  byId("requestId").value = String(first.requestId);
-  setMessage(userMessage, `${ZH.autoSelectedRequest}${first.requestId}`);
-  return Number(first.requestId);
+  await Promise.all([refreshQueueInfo(), refreshBills()]);
 }
 
 function bind(id, fn, scope = "user") {
@@ -382,7 +377,6 @@ bind("btnRegister", async () => {
     body: JSON.stringify({
       username: byId("regUsername").value.trim(),
       password: byId("regPassword").value.trim(),
-      batteryCapacityKwh: Number(byId("regBattery").value || 60),
     }),
   });
   setMessage(userMessage, ZH.registerOk);
@@ -408,6 +402,7 @@ bind("btnSubmitReq", async () => {
     body: JSON.stringify({
       userId: userIdValue(),
       mode: byId("mode").value,
+      batteryCapacityKwh: Number(byId("batteryCapacityKwh").value),
       requestKwh: Number(byId("requestKwh").value),
     }),
   });
@@ -419,12 +414,13 @@ bind("btnSubmitReq", async () => {
 });
 
 bind("btnModifyReq", async () => {
-  const reqId = requestIdValue();
   const payload = {
     userId: userIdValue(),
     mode: byId("mode").value,
+    batteryCapacityKwh: Number(byId("batteryCapacityKwh").value),
     requestKwh: Number(byId("requestKwh").value),
   };
+  const reqId = requestIdValue();
   if (reqId != null) payload.requestId = reqId;
   await request("/api/user/request", {
     method: "PUT",
@@ -441,12 +437,12 @@ bind("btnCancelReq", async () => {
     : `/api/user/request?userId=${userIdValue()}&requestId=${reqId}`;
   await request(url, { method: "DELETE" });
   setMessage(userMessage, ZH.cancelOk);
-  await Promise.all([refreshRequests(false), refreshQueueInfo()]);
+  await Promise.all([refreshRequests(false), refreshQueueInfo(), refreshBills(), refreshPiles()]);
 });
 
 bind("btnEndCharge", async () => {
-  const reqId = requestIdValue();
   const payload = { userId: userIdValue() };
+  const reqId = requestIdValue();
   if (reqId != null) payload.requestId = reqId;
   await request("/api/user/end", {
     method: "POST",
@@ -495,16 +491,16 @@ bind("btnUpdateConfig", async () => {
   if (byId("chargingQueueLen").value.trim()) {
     payload.chargingQueueLen = Number(byId("chargingQueueLen").value);
   }
-  if (byId("fastChargingPileNum") && byId("fastChargingPileNum").value.trim()) {
+  if (byId("fastChargingPileNum").value.trim()) {
     payload.fastChargingPileNum = Number(byId("fastChargingPileNum").value);
   }
-  if (byId("slowChargingPileNum") && byId("slowChargingPileNum").value.trim()) {
+  if (byId("slowChargingPileNum").value.trim()) {
     payload.slowChargingPileNum = Number(byId("slowChargingPileNum").value);
   }
-  if (byId("fastPower") && byId("fastPower").value.trim()) {
+  if (byId("fastPower").value.trim()) {
     payload.fastPower = Number(byId("fastPower").value);
   }
-  if (byId("slowPower") && byId("slowPower").value.trim()) {
+  if (byId("slowPower").value.trim()) {
     payload.slowPower = Number(byId("slowPower").value);
   }
   await request("/api/admin/config", {

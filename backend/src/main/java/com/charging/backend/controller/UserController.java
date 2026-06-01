@@ -32,7 +32,8 @@ public class UserController {
         Long userId = longNum(body.get("userId"));
         ChargeMode mode = ChargeMode.valueOf(str(body.get("mode")).toUpperCase());
         double requestKwh = doubleNum(body.get("requestKwh"));
-        ChargingRequest req = stationService.submitRequest(userId, mode, requestKwh);
+        double batteryCapacityKwh = doubleNum(body.get("batteryCapacityKwh"));
+        ChargingRequest req = stationService.submitRequest(userId, mode, requestKwh, batteryCapacityKwh);
         return ApiResponse.ok("request submitted", requestData(req));
     }
 
@@ -51,7 +52,11 @@ public class UserController {
         if (body.containsKey("requestKwh") && body.get("requestKwh") != null && !str(body.get("requestKwh")).isEmpty()) {
             requestKwh = doubleNum(body.get("requestKwh"));
         }
-        ChargingRequest req = stationService.modifyRequest(userId, requestId, mode, requestKwh);
+        Double batteryCapacityKwh = null;
+        if (body.containsKey("batteryCapacityKwh") && body.get("batteryCapacityKwh") != null && !str(body.get("batteryCapacityKwh")).isEmpty()) {
+            batteryCapacityKwh = doubleNum(body.get("batteryCapacityKwh"));
+        }
+        ChargingRequest req = stationService.modifyRequest(userId, requestId, mode, requestKwh, batteryCapacityKwh);
         return ApiResponse.ok("request updated", requestData(req));
     }
 
@@ -95,6 +100,7 @@ public class UserController {
         data.put("requestId", req.getId());
         data.put("queueNumber", req.getQueueNumber());
         data.put("mode", req.getMode());
+        data.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
         data.put("requestKwh", req.getRequestedKwh());
         data.put("status", req.getStatus());
         data.put("pileId", req.getPileId());

@@ -55,20 +55,17 @@ public class StationService {
         initPiles();
     }
 
-    public synchronized UserAccount register(String username, String password, double batteryCapacityKwh) {
+    public synchronized UserAccount register(String username, String password) {
         if (username == null || username.trim().isEmpty()) {
             throw new IllegalArgumentException("username cannot be empty");
         }
         if (password == null || password.trim().isEmpty()) {
             throw new IllegalArgumentException("password cannot be empty");
         }
-        if (batteryCapacityKwh <= 0) {
-            throw new IllegalArgumentException("battery capacity must be greater than 0");
-        }
         if (userByName.containsKey(username)) {
             throw new IllegalArgumentException("username already exists");
         }
-        UserAccount user = new UserAccount(userIdSeq.getAndIncrement(), username, password, batteryCapacityKwh);
+        UserAccount user = new UserAccount(userIdSeq.getAndIncrement(), username, password);
         users.put(user.getId(), user);
         userByName.put(user.getUsername(), user);
         return user;
@@ -82,9 +79,10 @@ public class StationService {
         return user;
     }
 
-    public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh) {
+    public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh, double batteryCapacityKwh) {
         refreshAndDispatch(now());
         validateUser(userId);
+        validateRequestAmounts(requestKwh, batteryCapacityKwh);
         if (waitingFast.size() + waitingSlow.size() + faultPriorityFast.size() + faultPrioritySlow.size() >= config.getWaitingAreaSize()) {
             throw new IllegalArgumentException("waiting area is full, cannot create request");
         }
@@ -92,6 +90,7 @@ public class StationService {
         req.setId(requestIdSeq.getAndIncrement());
         req.setUserId(userId);
         req.setMode(mode);
+        req.setBatteryCapacityKwh(batteryCapacityKwh);
         req.setRequestedKwh(requestKwh);
         req.setQueueNumber(nextQueueNumber(mode));
         req.setStatus(RequestStatus.WAITING_AREA);
@@ -102,7 +101,7 @@ public class StationService {
         return req;
     }
 
-    public synchronized ChargingRequest modifyRequest(Long userId, Long requestId, ChargeMode mode, Double requestKwh) {
+    public synchronized ChargingRequest modifyRequest(Long userId, Long requestId, ChargeMode mode, Double requestKwh, Double batteryCapacityKwh) {
         refreshAndDispatch(now());
         ChargingRequest req = resolveRequestForModify(userId, requestId);
         if (mode != null && req.getMode() != mode) {
@@ -114,10 +113,29 @@ public class StationService {
             req.setQueueNumber(nextQueueNumber(mode));
             waitingListByMode(mode).add(req.getId());
         }
+        if (batteryCapacityKwh != null) {
+            if (req.getStatus() != RequestStatus.WAITING_AREA) {
+                throw new IllegalArgumentException("battery capacity can only be changed in waiting area");
+            }
+            if (batteryCapacityKwh <= 0) {
+                throw new IllegalArgumentException("battery capacity must be greater than 0");
+            }
+        }
         if (requestKwh != null) {
             if (req.getStatus() != RequestStatus.WAITING_AREA) {
                 throw new IllegalArgumentException("request kwh can only be changed in waiting area");
             }
+            if (requestKwh <= 0) {
+                throw new IllegalArgumentException("request kwh must be greater than 0");
+            }
+        }
+        double newCapacity = batteryCapacityKwh != null ? batteryCapacityKwh : req.getBatteryCapacityKwh();
+        double newRequestKwh = requestKwh != null ? requestKwh : req.getRequestedKwh();
+        validateRequestAmounts(newRequestKwh, newCapacity);
+        if (batteryCapacityKwh != null) {
+            req.setBatteryCapacityKwh(batteryCapacityKwh);
+        }
+        if (requestKwh != null) {
             req.setRequestedKwh(requestKwh);
         }
         refreshAndDispatch(now());
@@ -193,6 +211,7 @@ public class StationService {
         data.put("mode", req.getMode());
         data.put("queueNumber", req.getQueueNumber());
         data.put("requestKwh", req.getRequestedKwh());
+        data.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
         data.put("pileId", req.getPileId());
         data.put("queueArea", queueAreaOf(req));
         data.put("inFaultQueue", isInFaultPriorityQueue(req));
@@ -222,6 +241,7 @@ public class StationService {
             item.put("mode", req.getMode());
             item.put("queueNumber", req.getQueueNumber());
             item.put("requestKwh", req.getRequestedKwh());
+            item.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
             item.put("pileId", req.getPileId());
             item.put("queueArea", queueAreaOf(req));
             item.put("inFaultQueue", isInFaultPriorityQueue(req));
@@ -260,11 +280,15 @@ public class StationService {
                 Map<String, Object> car = new LinkedHashMap<>();
                 car.put("userId", req.getUserId());
                 car.put("username", user == null ? "" : user.getUsername());
-                car.put("batteryCapacityKwh", user == null ? 0 : user.getBatteryCapacityKwh());
+                car.put("requestId", req.getId());
+                car.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
                 car.put("requestKwh", req.getRequestedKwh());
                 car.put("queueNumber", req.getQueueNumber());
                 car.put("status", req.getStatus());
                 car.put("queuedMinutes", req.getEnqueueTime() == null ? 0 : Duration.between(req.getEnqueueTime(), now()).toMinutes());
+                LocalDateTime[] estimated = estimateStartAndFinish(req, now());
+                car.put("startTime", estimated[0]);
+                car.put("expectedFinishTime", estimated[1]);
                 queueCars.add(car);
             }
             item.put("queueCars", queueCars);
@@ -697,6 +721,18 @@ public class StationService {
             throw new IllegalArgumentException("user not found");
         }
         return user;
+    }
+
+    private void validateRequestAmounts(double requestKwh, double batteryCapacityKwh) {
+        if (batteryCapacityKwh <= 0) {
+            throw new IllegalArgumentException("battery capacity must be greater than 0");
+        }
+        if (requestKwh <= 0) {
+            throw new IllegalArgumentException("request kwh must be greater than 0");
+        }
+        if (requestKwh > batteryCapacityKwh) {
+            throw new IllegalArgumentException("request kwh cannot exceed battery capacity");
+        }
     }
 
     private boolean isActive(ChargingRequest req) {

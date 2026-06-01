@@ -24,8 +24,7 @@ public class AuthController {
     public ApiResponse<Map<String, Object>> register(@RequestBody Map<String, Object> body) {
         String username = str(body.get("username"));
         String password = str(body.get("password"));
-        double batteryCapacityKwh = num(body.get("batteryCapacityKwh"), 60.0);
-        UserAccount user = stationService.register(username, password, batteryCapacityKwh);
+        UserAccount user = stationService.register(username, password);
         return ApiResponse.ok("register success", userData(user));
     }
 
@@ -41,7 +40,6 @@ public class AuthController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("userId", user.getId());
         data.put("username", user.getUsername());
-        data.put("batteryCapacityKwh", user.getBatteryCapacityKwh());
         return data;
     }
 
@@ -52,10 +50,4 @@ public class AuthController {
         return String.valueOf(v).trim();
     }
 
-    private double num(Object v, double dft) {
-        if (v == null) {
-            return dft;
-        }
-        return Double.parseDouble(String.valueOf(v));
-    }
 }

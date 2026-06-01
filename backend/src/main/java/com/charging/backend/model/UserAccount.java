@@ -4,16 +4,14 @@ public class UserAccount {
     private Long id;
     private String username;
     private String password;
-    private double batteryCapacityKwh;
 
     public UserAccount() {
     }
 
-    public UserAccount(Long id, String username, String password, double batteryCapacityKwh) {
+    public UserAccount(Long id, String username, String password) {
         this.id = id;
         this.username = username;
         this.password = password;
-        this.batteryCapacityKwh = batteryCapacityKwh;
     }
 
     public Long getId() {
@@ -38,13 +36,5 @@ public class UserAccount {
 
     public void setPassword(String password) {
         this.password = password;
-    }
-
-    public double getBatteryCapacityKwh() {
-        return batteryCapacityKwh;
-    }
-
-    public void setBatteryCapacityKwh(double batteryCapacityKwh) {
-        this.batteryCapacityKwh = batteryCapacityKwh;
     }
 }

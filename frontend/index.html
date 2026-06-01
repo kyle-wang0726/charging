@@ -39,7 +39,6 @@
       <div class="form-grid">
         <input id="regUsername" placeholder="注册用户名"/>
         <input id="regPassword" placeholder="注册密码" type="password"/>
-        <input id="regBattery" placeholder="电池容量(kWh)" value="60"/>
         <button id="btnRegister">注册</button>
       </div>
       <div class="form-grid">
@@ -48,11 +47,12 @@
         <button id="btnLogin">登录</button>
         <input id="userId" placeholder="当前用户ID" readonly/>
       </div>
-      <div class="form-grid cols-4">
+      <div class="form-grid cols-5">
         <select id="mode">
           <option value="FAST">快充</option>
           <option value="SLOW">慢充</option>
         </select>
+        <input id="batteryCapacityKwh" placeholder="车辆电池容量(kWh)" value="60"/>
         <input id="requestKwh" placeholder="请求电量(kWh)" value="30"/>
         <input id="requestId" placeholder="订单ID（requestId）"/>
         <button id="btnSubmitReq">提交请求</button>
