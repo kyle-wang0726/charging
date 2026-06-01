@@ -5,12 +5,12 @@
 body {
   margin: 0;
   font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: #f4f7fb;
-  color: #1e293b;
+  background: #f3f6fb;
+  color: #1f2937;
 }
 
 .app {
-  max-width: 1380px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -19,63 +19,48 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
 
 .topbar h1 {
   margin: 0;
   font-size: 26px;
-  font-weight: 700;
   color: #0f172a;
 }
 
 .topbar-controls {
   display: flex;
-  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.clockbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 14px;
-  background: #ffffff;
-  border: 1px solid #d9e2ec;
+.view-switch {
+  display: inline-flex;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
-  margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+  margin-bottom: 14px;
 }
 
-.clock-main {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+.switch-btn {
+  min-width: 120px;
+  height: 40px;
+  border: none;
+  background: #e2e8f0;
+  color: #334155;
+  font-weight: 700;
+  cursor: pointer;
 }
 
-.clock-label {
-  color: #5b6472;
-  font-size: 14px;
+.switch-btn.active {
+  background: #2563eb;
+  color: #ffffff;
 }
 
-#systemTimeText {
-  font-size: 22px;
-  color: #0f172a;
-}
-
-.clock-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(360px, 1fr));
-  gap: 16px;
+.page-panel {
+  margin-bottom: 14px;
 }
 
 .surface {
@@ -86,17 +71,82 @@ body {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.sub-surface {
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
 .surface h2 {
   margin: 0 0 14px 0;
-  font-size: 18px;
+  font-size: 20px;
+}
+
+.sub-surface h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.tip {
+  font-size: 13px;
+  color: #475569;
+}
+
+.user-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.user-chip {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  border: 1px solid #bae6fd;
+}
+
+.clockbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.clock-main {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+#systemTimeText {
+  font-size: 20px;
   color: #0f172a;
+}
+
+.clock-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
   gap: 10px;
   margin-bottom: 12px;
+}
+
+.form-grid.cols-3 {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
 }
 
 .form-grid.cols-4 {
@@ -104,11 +154,7 @@ body {
 }
 
 .form-grid.cols-5 {
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-}
-
-.form-grid.cols-3 {
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(5, minmax(130px, 1fr));
 }
 
 input, select, button {
@@ -125,14 +171,14 @@ input, select {
 
 button {
   background: #0f766e;
-  border-color: #0f766e;
   color: #ffffff;
-  cursor: pointer;
+  border-color: #0f766e;
   font-weight: 600;
+  cursor: pointer;
 }
 
 button:hover {
-  background: #0d6b64;
+  filter: brightness(0.96);
 }
 
 .btn-secondary {
@@ -140,24 +186,39 @@ button:hover {
   border-color: #2563eb;
 }
 
-.btn-secondary:hover {
-  background: #1d4ed8;
-}
-
 .btn-danger {
   background: #b91c1c;
   border-color: #b91c1c;
 }
 
-.btn-danger:hover {
-  background: #991b1b;
+.message {
+  min-height: 44px;
+  margin: 8px 0 12px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1e40af;
 }
 
-.message {
-  min-height: 24px;
-  font-size: 14px;
-  color: #0f766e;
-  margin: 8px 0 12px;
+.message.msg-success {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.message.msg-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.message.msg-warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
 }
 
 .data-box {
@@ -165,24 +226,24 @@ button:hover {
   border-radius: 8px;
   background: #f8fafc;
   padding: 12px;
-  min-height: 130px;
+  min-height: 120px;
   margin-bottom: 10px;
   overflow: auto;
 }
 
 .kvs {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  grid-template-columns: 150px 1fr;
   gap: 6px 10px;
   font-size: 14px;
 }
 
-.kvs .k {
-  color: #5b6878;
+.k {
+  color: #64748b;
 }
 
-.kvs .v {
-  color: #111827;
+.v {
+  color: #0f172a;
   font-weight: 600;
 }
 
@@ -194,14 +255,14 @@ table {
 
 th, td {
   border-bottom: 1px solid #e2e8f0;
-  text-align: left;
   padding: 8px 6px;
+  text-align: left;
   vertical-align: top;
 }
 
 th {
-  color: #516072;
-  font-weight: 600;
+  color: #475569;
+  font-weight: 700;
 }
 
 tbody tr:hover {
@@ -214,18 +275,18 @@ tbody tr:hover {
 
 .tag {
   display: inline-block;
+  padding: 3px 8px;
   border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 12px;
   background: #dbeafe;
   color: #1d4ed8;
+  font-size: 12px;
+}
+
+.hidden {
+  display: none !important;
 }
 
 @media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
   .topbar {
     flex-direction: column;
     align-items: flex-start;
@@ -236,10 +297,6 @@ tbody tr:hover {
     align-items: flex-start;
   }
 
-  .form-grid {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-  }
-
   .form-grid.cols-3,
   .form-grid.cols-4,
   .form-grid.cols-5 {
@@ -247,11 +304,15 @@ tbody tr:hover {
   }
 }
 
-@media (max-width: 560px) {
-  .form-grid,
+@media (max-width: 600px) {
   .form-grid.cols-3,
   .form-grid.cols-4,
   .form-grid.cols-5 {
     grid-template-columns: 1fr;
+  }
+
+  .user-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
