@@ -1,0 +1,13 @@
+# IDE
+.idea/
+*.iml
+
+# Build outputs
+backend/target/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp artifacts
+.tmp_docx/

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>智能充电桩调度计费系统</title>
+  <link rel="stylesheet" href="./style.css"/>
+</head>
+<body>
+<main class="app">
+  <header class="topbar">
+    <h1>智能充电桩调度计费系统</h1>
+    <div class="topbar-controls">
+      <label for="baseUrl">后端地址</label>
+      <input id="baseUrl" value="http://localhost:8080"/>
+      <button id="btnRefreshAll" class="btn-secondary">刷新总览</button>
+    </div>
+  </header>
+
+  <section class="clockbar">
+    <div class="clock-main">
+      <span class="clock-label">系统时间</span>
+      <strong id="systemTimeText">--</strong>
+    </div>
+    <div class="clock-actions">
+      <button id="btnTime10">+10分钟</button>
+      <button id="btnTime30">+30分钟</button>
+      <button id="btnTime60">+1小时</button>
+      <button id="btnTime360" class="btn-secondary">+6小时</button>
+      <button id="btnTime1440" class="btn-secondary">+24小时</button>
+      <input id="customMinutes" type="number" min="1" value="15" placeholder="自定义分钟"/>
+      <button id="btnAdvanceCustom">推进时间</button>
+    </div>
+  </section>
+
+  <section class="layout">
+    <section class="surface">
+      <h2>用户端</h2>
+      <div class="form-grid">
+        <input id="regUsername" placeholder="注册用户名"/>
+        <input id="regPassword" placeholder="注册密码" type="password"/>
+        <input id="regBattery" placeholder="电池容量(kWh)" value="60"/>
+        <button id="btnRegister">注册</button>
+      </div>
+      <div class="form-grid">
+        <input id="loginUsername" placeholder="登录用户名"/>
+        <input id="loginPassword" placeholder="登录密码" type="password"/>
+        <button id="btnLogin">登录</button>
+        <input id="userId" placeholder="当前用户ID" readonly/>
+      </div>
+      <div class="form-grid cols-4">
+        <select id="mode">
+          <option value="FAST">快充</option>
+          <option value="SLOW">慢充</option>
+        </select>
+        <input id="requestKwh" placeholder="请求电量(kWh)" value="30"/>
+        <button id="btnSubmitReq">提交请求</button>
+        <button id="btnModifyReq" class="btn-secondary">修改请求</button>
+      </div>
+      <div class="form-grid cols-4">
+        <button id="btnCancelReq" class="btn-danger">取消请求</button>
+        <button id="btnEndCharge" class="btn-secondary">结束充电</button>
+        <button id="btnQueueInfo" class="btn-secondary">查看排队信息</button>
+        <button id="btnBills" class="btn-secondary">查看充电详单</button>
+      </div>
+      <div id="userMessage" class="message">就绪</div>
+      <div id="queueInfoView" class="data-box"></div>
+      <div id="billsView" class="data-box"></div>
+    </section>
+
+    <section class="surface">
+      <h2>管理端</h2>
+      <div class="form-grid cols-3">
+        <button id="btnPiles">刷新充电桩状态</button>
+        <select id="strategy">
+          <option value="PRIORITY">故障优先级调度</option>
+          <option value="TIME_ORDER">故障时间顺序调度</option>
+        </select>
+        <button id="btnSetStrategy" class="btn-secondary">更新调度策略</button>
+      </div>
+      <div class="form-grid cols-3">
+        <input id="pileId" placeholder="充电桩编号，例如 F1/T2"/>
+        <select id="pileState">
+          <option value="WORKING">工作中</option>
+          <option value="SHUTDOWN">关闭</option>
+          <option value="FAULT">故障</option>
+        </select>
+        <button id="btnChangePileState">更新桩状态</button>
+      </div>
+      <div class="form-grid cols-3">
+        <input id="waitingAreaSize" placeholder="等候区容量 N"/>
+        <input id="chargingQueueLen" placeholder="队列长度 M"/>
+        <button id="btnUpdateConfig" class="btn-secondary">更新系统配置</button>
+      </div>
+      <div class="form-grid cols-3">
+        <select id="reportPeriod">
+          <option value="day">日报</option>
+          <option value="week">周报</option>
+          <option value="month">月报</option>
+        </select>
+        <button id="btnReport" class="btn-secondary">查看报表</button>
+      </div>
+      <div id="adminMessage" class="message">就绪</div>
+      <div id="pileView" class="data-box"></div>
+      <div id="reportView" class="data-box"></div>
+    </section>
+  </section>
+</main>
+<script src="./app.js"></script>
+</body>
+</html>
