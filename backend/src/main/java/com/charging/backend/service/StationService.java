@@ -97,19 +97,17 @@ public class StationService {
         refreshAndDispatch(now());
         ChargingRequest req = resolveRequestForModify(userId, requestId);
         if (mode != null && req.getMode() != mode) {
-            if (!isEditableWaitingStatus(req.getStatus())) {
-                throw new IllegalArgumentException("mode can only be changed before charging starts");
+            if (req.getStatus() != RequestStatus.WAITING_AREA) {
+                throw new IllegalArgumentException("mode can only be changed in waiting area");
             }
-            detachFromCurrentWaitingPosition(req);
+            waitingListByMode(req.getMode()).remove(req.getId());
             req.setMode(mode);
             req.setQueueNumber(nextQueueNumber(mode));
-            req.setStatus(RequestStatus.WAITING_AREA);
-            req.setPileId(null);
             waitingListByMode(mode).add(req.getId());
         }
         if (requestKwh != null) {
-            if (!isEditableWaitingStatus(req.getStatus())) {
-                throw new IllegalArgumentException("request kwh can only be changed before charging starts");
+            if (req.getStatus() != RequestStatus.WAITING_AREA) {
+                throw new IllegalArgumentException("request kwh can only be changed in waiting area");
             }
             req.setRequestedKwh(requestKwh);
         }
@@ -652,13 +650,13 @@ public class StationService {
             return resolveActiveRequest(userId, requestId);
         }
         List<ChargingRequest> waiting = findActiveRequestsByUser(userId).stream()
-                .filter(req -> isEditableWaitingStatus(req.getStatus()))
+                .filter(req -> req.getStatus() == RequestStatus.WAITING_AREA)
                 .toList();
         if (waiting.isEmpty()) {
-            throw new IllegalArgumentException("no waiting request to modify");
+            throw new IllegalArgumentException("no waiting-area request to modify");
         }
         if (waiting.size() > 1) {
-            throw new IllegalArgumentException("multiple waiting requests, requestId is required");
+            throw new IllegalArgumentException("multiple waiting-area requests, requestId is required");
         }
         return waiting.get(0);
     }
@@ -713,23 +711,6 @@ public class StationService {
             return waiting.get(0);
         }
         return active.get(0);
-    }
-
-    private boolean isEditableWaitingStatus(RequestStatus status) {
-        return status == RequestStatus.WAITING_AREA || status == RequestStatus.QUEUED;
-    }
-
-    private void detachFromCurrentWaitingPosition(ChargingRequest req) {
-        if (req.getStatus() == RequestStatus.WAITING_AREA) {
-            waitingListByMode(req.getMode()).remove(req.getId());
-            return;
-        }
-        if (req.getStatus() == RequestStatus.QUEUED && req.getPileId() != null) {
-            ChargingPile pile = piles.get(req.getPileId());
-            if (pile != null) {
-                pile.getQueueRequestIds().remove(req.getId());
-            }
-        }
     }
 
     private ChargingPile requirePile(String pileId) {
