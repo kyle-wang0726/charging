@@ -60,7 +60,23 @@ public class AdminController {
                 ? Integer.parseInt(String.valueOf(body.get("waitingAreaSize"))) : null;
         Integer chargingQueueLen = body.containsKey("chargingQueueLen")
                 ? Integer.parseInt(String.valueOf(body.get("chargingQueueLen"))) : null;
-        stationService.updateConfig(waitingAreaSize, chargingQueueLen);
+        Integer fastChargingPileNum = body.containsKey("fastChargingPileNum")
+                ? Integer.parseInt(String.valueOf(body.get("fastChargingPileNum"))) : null;
+        Integer slowChargingPileNum = body.containsKey("slowChargingPileNum")
+                ? Integer.parseInt(String.valueOf(body.get("slowChargingPileNum"))) : null;
+        Double fastPower = body.containsKey("fastPower")
+                ? Double.parseDouble(String.valueOf(body.get("fastPower"))) : null;
+        Double slowPower = body.containsKey("slowPower")
+                ? Double.parseDouble(String.valueOf(body.get("slowPower"))) : null;
+
+        stationService.updateConfig(
+                waitingAreaSize,
+                chargingQueueLen,
+                fastChargingPileNum,
+                slowChargingPileNum,
+                fastPower,
+                slowPower
+        );
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("config", stationService.getConfig());
         return ApiResponse.ok("config updated", data);

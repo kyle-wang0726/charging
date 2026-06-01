@@ -70,6 +70,16 @@ function statusLabel(status) {
   return map[status] || status || "--";
 }
 
+function queueAreaLabel(area) {
+  const map = {
+    WAITING_AREA: "\u7b49\u5019\u533a",
+    FAULT_WAITING: "\u6545\u969c\u7b49\u5019\u961f\u5217",
+    CHARGING_AREA: "\u5145\u7535\u533a",
+    NONE: "--",
+  };
+  return map[area] || area || "--";
+}
+
 function pileStateLabel(state) {
   const map = {
     WORKING: "\u5de5\u4f5c\u4e2d",
@@ -133,6 +143,7 @@ function renderQueueInfo(data) {
       <div class="k">\u6392\u961f\u53f7</div><div class="v">${data.queueNumber ?? "--"}</div>
       <div class="k">\u5145\u7535\u6a21\u5f0f</div><div class="v">${modeLabel(data.mode)}</div>
       <div class="k">\u5f53\u524d\u72b6\u6001</div><div class="v"><span class="tag">${statusLabel(data.status)}</span></div>
+      <div class="k">\u6240\u5728\u533a\u57df</div><div class="v">${queueAreaLabel(data.queueArea)}</div>
       <div class="k">\u8bf7\u6c42\u7535\u91cf</div><div class="v">${data.requestKwh ?? 0} kWh</div>
       <div class="k">\u524d\u8f66\u6570\u91cf</div><div class="v">${data.frontCars ?? 0}</div>
       <div class="k">\u5206\u914d\u5145\u7535\u6869</div><div class="v">${data.pileId ?? "--"}</div>
@@ -189,6 +200,7 @@ function renderRequests(rows) {
       <td>${r.queueNumber ?? "--"}</td>
       <td>${modeLabel(r.mode)}</td>
       <td><span class="tag">${statusLabel(r.status)}</span></td>
+      <td>${queueAreaLabel(r.queueArea)}</td>
       <td>${r.requestKwh}</td>
       <td>${r.frontCars ?? 0}</td>
       <td>${r.pileId ?? "--"}</td>
@@ -200,7 +212,7 @@ function renderRequests(rows) {
     <table>
       <thead>
       <tr>
-        <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>电量(kWh)</th><th>前车</th><th>充电桩</th><th>入队时间</th>
+        <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>区域</th><th>电量(kWh)</th><th>前车</th><th>充电桩</th><th>入队时间</th>
       </tr>
       </thead>
       <tbody>${html}</tbody>
@@ -476,6 +488,18 @@ bind("btnUpdateConfig", async () => {
   }
   if (byId("chargingQueueLen").value.trim()) {
     payload.chargingQueueLen = Number(byId("chargingQueueLen").value);
+  }
+  if (byId("fastChargingPileNum") && byId("fastChargingPileNum").value.trim()) {
+    payload.fastChargingPileNum = Number(byId("fastChargingPileNum").value);
+  }
+  if (byId("slowChargingPileNum") && byId("slowChargingPileNum").value.trim()) {
+    payload.slowChargingPileNum = Number(byId("slowChargingPileNum").value);
+  }
+  if (byId("fastPower") && byId("fastPower").value.trim()) {
+    payload.fastPower = Number(byId("fastPower").value);
+  }
+  if (byId("slowPower") && byId("slowPower").value.trim()) {
+    payload.slowPower = Number(byId("slowPower").value);
   }
   await request("/api/admin/config", {
     method: "POST",

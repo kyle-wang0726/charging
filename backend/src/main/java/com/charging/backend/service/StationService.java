@@ -85,7 +85,7 @@ public class StationService {
     public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh) {
         refreshAndDispatch(now());
         validateUser(userId);
-        if (waitingFast.size() + waitingSlow.size() >= config.getWaitingAreaSize()) {
+        if (waitingFast.size() + waitingSlow.size() + faultPriorityFast.size() + faultPrioritySlow.size() >= config.getWaitingAreaSize()) {
             throw new IllegalArgumentException("waiting area is full, cannot create request");
         }
         ChargingRequest req = new ChargingRequest();
@@ -129,6 +129,8 @@ public class StationService {
         ChargingRequest req = resolveRequestForCancel(userId, requestId);
         if (req.getStatus() == RequestStatus.WAITING_AREA) {
             waitingListByMode(req.getMode()).remove(req.getId());
+            faultPriorityByMode(req.getMode()).remove(req.getId());
+            createCancelBill(req, now());
             req.setStatus(RequestStatus.CANCELED);
             return;
         }
@@ -137,6 +139,7 @@ public class StationService {
             if (pile != null) {
                 pile.getQueueRequestIds().remove(req.getId());
             }
+            createCancelBill(req, now());
             req.setStatus(RequestStatus.CANCELED);
             req.setPileId(null);
             refreshAndDispatch(now());
@@ -191,6 +194,8 @@ public class StationService {
         data.put("queueNumber", req.getQueueNumber());
         data.put("requestKwh", req.getRequestedKwh());
         data.put("pileId", req.getPileId());
+        data.put("queueArea", queueAreaOf(req));
+        data.put("inFaultQueue", isInFaultPriorityQueue(req));
         data.put("frontCars", countFrontCars(req));
         data.put("enqueueTime", req.getEnqueueTime());
         data.put("startTime", estimated[0]);
@@ -218,6 +223,8 @@ public class StationService {
             item.put("queueNumber", req.getQueueNumber());
             item.put("requestKwh", req.getRequestedKwh());
             item.put("pileId", req.getPileId());
+            item.put("queueArea", queueAreaOf(req));
+            item.put("inFaultQueue", isInFaultPriorityQueue(req));
             item.put("frontCars", countFrontCars(req));
             item.put("enqueueTime", req.getEnqueueTime());
             LocalDateTime[] estimated = estimateStartAndFinish(req, now());
@@ -298,12 +305,42 @@ public class StationService {
         return config;
     }
 
-    public synchronized void updateConfig(Integer waitingAreaSize, Integer queueLen) {
+    public synchronized void updateConfig(Integer waitingAreaSize,
+                                          Integer queueLen,
+                                          Integer fastPileNum,
+                                          Integer slowPileNum,
+                                          Double fastPower,
+                                          Double slowPower) {
+        boolean pileCountChanged = false;
+        if (fastPileNum != null && fastPileNum > 0 && fastPileNum != config.getFastChargingPileNum()) {
+            pileCountChanged = true;
+        }
+        if (slowPileNum != null && slowPileNum > 0 && slowPileNum != config.getSlowChargingPileNum()) {
+            pileCountChanged = true;
+        }
+        if (pileCountChanged && hasActiveRequests()) {
+            throw new IllegalArgumentException("cannot change pile count while requests are active");
+        }
         if (waitingAreaSize != null && waitingAreaSize > 0) {
             config.setWaitingAreaSize(waitingAreaSize);
         }
         if (queueLen != null && queueLen > 0) {
             config.setChargingQueueLen(queueLen);
+        }
+        if (fastPileNum != null && fastPileNum > 0) {
+            config.setFastChargingPileNum(fastPileNum);
+        }
+        if (slowPileNum != null && slowPileNum > 0) {
+            config.setSlowChargingPileNum(slowPileNum);
+        }
+        if (fastPower != null && fastPower > 0) {
+            config.setFastPower(fastPower);
+        }
+        if (slowPower != null && slowPower > 0) {
+            config.setSlowPower(slowPower);
+        }
+        if (pileCountChanged) {
+            initPiles();
         }
         refreshAndDispatch(now());
     }
@@ -616,7 +653,7 @@ public class StationService {
         req.setChargeStopTime(stopAt);
         double power = powerByMode(req.getMode());
         ChargeBill bill = billingService.buildBill(
-                "B" + billSeq.getAndIncrement(),
+                "B" + billSeq.getAndIncrement() + "-R" + req.getId(),
                 req.getUserId(),
                 pile.getId(),
                 req.getChargeStartTime(),
@@ -629,6 +666,21 @@ public class StationService {
         pile.setTotalChargeCount(pile.getTotalChargeCount() + 1);
         pile.setTotalChargeHours(pile.getTotalChargeHours() + bill.getChargedHours());
         pile.setTotalChargeKwh(pile.getTotalChargeKwh() + bill.getChargedKwh());
+        return bill;
+    }
+
+    private ChargeBill createCancelBill(ChargingRequest req, LocalDateTime at) {
+        ChargeBill bill = billingService.buildBill(
+                "B" + billSeq.getAndIncrement() + "-R" + req.getId(),
+                req.getUserId(),
+                req.getPileId() == null ? "-" : req.getPileId(),
+                req.getChargeStartTime(),
+                at,
+                powerByMode(req.getMode()),
+                req.getRequestedKwh(),
+                config
+        );
+        bills.add(bill);
         return bill;
     }
 
@@ -649,6 +701,15 @@ public class StationService {
 
     private boolean isActive(ChargingRequest req) {
         return req != null && isActiveStatus(req.getStatus());
+    }
+
+    private boolean hasActiveRequests() {
+        for (ChargingRequest req : requests.values()) {
+            if (isActive(req)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isActiveStatus(RequestStatus status) {
@@ -774,10 +835,18 @@ public class StationService {
     }
 
     private int countFrontCars(ChargingRequest req) {
+        if (req == null || req.getStatus() == RequestStatus.CANCELED || req.getStatus() == RequestStatus.COMPLETED) {
+            return 0;
+        }
         if (req.getStatus() == RequestStatus.WAITING_AREA) {
+            List<Long> priority = faultPriorityByMode(req.getMode());
+            int p = priority.indexOf(req.getId());
+            if (p >= 0) {
+                return p;
+            }
             List<Long> waiting = waitingListByMode(req.getMode());
-            int pos = waiting.indexOf(req.getId());
-            return Math.max(pos, 0);
+            int w = waiting.indexOf(req.getId());
+            return w < 0 ? priority.size() : priority.size() + w;
         }
         if (req.getPileId() != null) {
             ChargingPile pile = piles.get(req.getPileId());
@@ -786,7 +855,21 @@ public class StationService {
                 return Math.max(pos, 0);
             }
         }
-        return 0;
+        // fallback: mode-level queue order
+        int currentOrder = queueOrder(req.getId());
+        int count = 0;
+        for (ChargingRequest other : requests.values()) {
+            if (other == null || Objects.equals(other.getId(), req.getId())) {
+                continue;
+            }
+            if (other.getMode() != req.getMode() || !isActive(other)) {
+                continue;
+            }
+            if (queueOrder(other.getId()) < currentOrder) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private LocalDateTime[] estimateStartAndFinish(ChargingRequest req, LocalDateTime currentTime) {
@@ -951,6 +1034,26 @@ public class StationService {
             return Integer.MAX_VALUE;
         }
         return Integer.parseInt(req.getQueueNumber().substring(1));
+    }
+
+    private boolean isInFaultPriorityQueue(ChargingRequest req) {
+        if (req == null) {
+            return false;
+        }
+        return faultPriorityByMode(req.getMode()).contains(req.getId());
+    }
+
+    private String queueAreaOf(ChargingRequest req) {
+        if (req == null) {
+            return "NONE";
+        }
+        if (req.getStatus() == RequestStatus.WAITING_AREA) {
+            return isInFaultPriorityQueue(req) ? "FAULT_WAITING" : "WAITING_AREA";
+        }
+        if (req.getStatus() == RequestStatus.QUEUED || req.getStatus() == RequestStatus.CHARGING) {
+            return "CHARGING_AREA";
+        }
+        return "NONE";
     }
 
     private boolean inPeriod(LocalDateTime time, LocalDateTime current, String period) {
