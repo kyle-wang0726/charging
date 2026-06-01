@@ -27,6 +27,7 @@ const ZH = {
   queueRefreshed: "\u6392\u961f\u4fe1\u606f\u5df2\u5237\u65b0",
   requestsRefreshed: "\u8ba2\u5355\u5217\u8868\u5df2\u5237\u65b0",
   requestSelected: "\u5df2\u9009\u4e2d\u8ba2\u5355 requestId=",
+  autoSelectedRequest: "\u672a\u8f93\u5165requestId\uff0c\u5df2\u81ea\u52a8\u9009\u4e2d\u8ba2\u5355 requestId=",
   billRefreshed: "\u8be6\u5355\u5df2\u5237\u65b0",
   pilesRefreshed: "\u5145\u7535\u6869\u72b6\u6001\u5df2\u5237\u65b0",
   strategyOk: "\u8c03\u5ea6\u7b56\u7565\u5df2\u66f4\u65b0",
@@ -321,6 +322,7 @@ async function refreshQueueInfo() {
 async function refreshRequests(includeFinished = false) {
   const res = await request(`/api/user/requests?userId=${userIdValue()}&includeFinished=${includeFinished}`);
   renderRequests(res.data);
+  return res.data || [];
 }
 
 async function refreshBills() {
@@ -344,11 +346,26 @@ async function refreshUserPanelsIfLoggedIn() {
   if (!userId) {
     return;
   }
+  await refreshRequests(false);
   await Promise.all([
-    refreshRequests(false),
     refreshQueueInfo(),
     refreshBills(),
   ]);
+}
+
+async function ensureRequestIdSelected() {
+  const current = requestIdValue();
+  if (current != null) {
+    return current;
+  }
+  const rows = await refreshRequests(false);
+  if (!rows || rows.length === 0) {
+    throw new Error(ZH.noRequests);
+  }
+  const first = rows.find((r) => r.status === "WAITING_AREA" || r.status === "QUEUED" || r.status === "CHARGING") || rows[0];
+  byId("requestId").value = String(first.requestId);
+  setMessage(userMessage, `${ZH.autoSelectedRequest}${first.requestId}`);
+  return Number(first.requestId);
 }
 
 function bind(id, fn, scope = "user") {
@@ -442,6 +459,7 @@ bind("btnEndCharge", async () => {
 });
 
 bind("btnQueueInfo", async () => {
+  await ensureRequestIdSelected();
   await refreshQueueInfo();
   setMessage(userMessage, ZH.queueRefreshed);
 });
@@ -479,6 +497,7 @@ bind("btnChangePileState", async () => {
   });
   setMessage(adminMessage, ZH.pileStateOk);
   await refreshPiles();
+  await refreshUserPanelsIfLoggedIn();
 }, "admin");
 
 bind("btnUpdateConfig", async () => {
