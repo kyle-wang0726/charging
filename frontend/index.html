@@ -7,134 +7,394 @@
   <link rel="stylesheet" href="./style.css"/>
 </head>
 <body>
-<main class="app">
+<div id="app" class="app">
   <header class="topbar">
-    <h1>智能充电桩调度计费系统</h1>
-    <div class="topbar-controls">
-      <label for="baseUrl">后端地址</label>
-      <input id="baseUrl" value="http://localhost:8080"/>
-      <button id="btnRefreshAll" class="btn-secondary">刷新总览</button>
+    <div class="view-switch">
+      <button class="switch-btn" :class="{ active: currentView === 'user' }" @click="setView('user')">用户端</button>
+      <button class="switch-btn" :class="{ active: currentView === 'admin' }" @click="setView('admin')">管理端</button>
+    </div>
+    <div class="time-module">
+      <div class="time-main">
+        <strong>{{ systemTimeText }}</strong>
+      </div>
+      <div class="time-actions">
+        <button class="btn ghost" @click="refreshSystemTime">刷新</button>
+        <button class="btn primary" @click="advanceMinutes(10)">+10分钟</button>
+        <button class="btn ghost" @click="advanceMinutes(30)">+30分钟</button>
+        <button class="btn ghost" @click="advanceMinutes(60)">+1小时</button>
+        <button class="btn ghost" @click="advanceMinutes(360)">+6小时</button>
+        <button class="btn ghost" @click="advanceMinutes(1440)">+1天</button>
+        <div class="time-input">
+          <input v-model.number="admin.customMinutes" type="number" min="1" placeholder="分钟"/>
+          <span>分钟</span>
+        </div>
+        <button class="btn secondary" @click="advanceCustom">推进</button>
+      </div>
     </div>
   </header>
 
-  <section class="view-switch">
-    <button id="btnShowUser" class="switch-btn active">用户端</button>
-    <button id="btnShowAdmin" class="switch-btn">管理端</button>
-  </section>
-
-  <section id="userPanel" class="surface page-panel">
-    <h2>用户端</h2>
-    <div id="userMessage" class="message">就绪</div>
-
-    <div id="userAuthCard" class="sub-surface">
-      <h3>登录 / 注册</h3>
-      <div class="form-grid cols-3">
-        <input id="regUsername" placeholder="注册用户名"/>
-        <input id="regPassword" placeholder="注册密码" type="password"/>
-        <button id="btnRegister">注册</button>
+  <section v-if="currentView === 'user' && !user.loggedIn" class="auth-wrap">
+    <div class="auth-card">
+      <h1>智能充电桩调度计费系统</h1>
+      <p>用户登录后可提交充电请求并查看详单与排队进度。</p>
+      <div class="tab-switch">
+        <button :class="{ active: authTab === 'login' }" @click="authTab = 'login'">登录</button>
+        <button :class="{ active: authTab === 'register' }" @click="authTab = 'register'">注册</button>
       </div>
-      <div class="form-grid cols-3">
-        <input id="loginUsername" placeholder="登录用户名"/>
-        <input id="loginPassword" placeholder="登录密码" type="password"/>
-        <button id="btnLogin">登录</button>
+      <div v-if="authTab === 'login'" class="tab-panel">
+        <div class="field">
+          <label>用户名</label>
+          <input v-model="auth.loginUsername" placeholder="输入用户名"/>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input v-model="auth.loginPassword" type="password" placeholder="输入密码"/>
+        </div>
+        <button class="btn primary" @click="login">登录</button>
       </div>
-      <div id="userAuthTip" class="tip">登录成功后自动进入用户操作界面。</div>
-    </div>
-
-    <div id="userWorkspace" class="hidden">
-      <div class="user-head">
-        <div class="user-chip">当前用户ID：<strong id="userIdText">--</strong></div>
-        <input id="userId" type="hidden" readonly/>
-        <button id="btnLogout" class="btn-secondary">退出登录</button>
+      <div v-else class="tab-panel">
+        <div class="field">
+          <label>用户名</label>
+          <input v-model="auth.regUsername" placeholder="创建用户名"/>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input v-model="auth.regPassword" type="password" placeholder="设置密码"/>
+        </div>
+        <button class="btn ghost" @click="registerUser">注册账号</button>
       </div>
-
-      <div class="form-grid cols-5">
-        <select id="mode">
-          <option value="FAST">快充</option>
-          <option value="SLOW">慢充</option>
-        </select>
-        <input id="batteryCapacityKwh" placeholder="车辆电池容量(kWh)" value="60"/>
-        <input id="requestKwh" placeholder="请求电量(kWh)" value="30"/>
-        <input id="requestId" placeholder="订单ID（requestId）"/>
-        <button id="btnSubmitReq">提交请求</button>
-      </div>
-      <div class="form-grid cols-4">
-        <button id="btnModifyReq" class="btn-secondary">修改请求</button>
-        <button id="btnCancelReq" class="btn-danger">取消请求</button>
-        <button id="btnEndCharge" class="btn-secondary">结束充电</button>
-        <button id="btnUserRefresh" class="btn-secondary">用户端刷新</button>
-      </div>
-      <div id="requestsView" class="data-box"></div>
-      <div id="queueInfoView" class="data-box"></div>
-      <div id="billsView" class="data-box"></div>
+      <div class="message" :class="messageClass(userMessage.type)">{{ userMessage.text }}</div>
     </div>
   </section>
 
-  <section id="adminPanel" class="surface page-panel hidden">
-    <h2>管理端（无需登录）</h2>
-
-    <section class="clockbar">
-      <div class="clock-main">
-        <span class="clock-label">系统时间</span>
-        <strong id="systemTimeText">--</strong>
+  <section v-else class="workspace">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div>
+          <h1>智能充电桩调度计费系统</h1>
+          <span>Charging Station Console</span>
+        </div>
       </div>
-      <div class="clock-actions">
-        <button id="btnTime10">+10分钟</button>
-        <button id="btnTime30">+30分钟</button>
-        <button id="btnTime60">+1小时</button>
-        <button id="btnTime360" class="btn-secondary">+6小时</button>
-        <button id="btnTime1440" class="btn-secondary">+24小时</button>
-        <input id="customMinutes" type="number" min="1" value="15" placeholder="自定义分钟"/>
-        <button id="btnAdvanceCustom">推进时间</button>
+
+      <nav class="nav">
+        <button v-for="item in activeNav" :key="item.id"
+                class="nav-btn" :class="{ active: activeTab === item.id }"
+                @click="activeTab = item.id">
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span class="nav-text">{{ item.label }}</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div class="avatar">{{ footerProfile.initial }}</div>
+          <div class="meta">
+            <div class="name">{{ footerProfile.name }}</div>
+            <div class="desc">{{ footerProfile.desc }}</div>
+          </div>
+        </div>
+        <button class="logout" @click="handleLogout" aria-label="退出登录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
       </div>
-    </section>
+    </aside>
 
-    <div class="form-grid cols-3">
-      <button id="btnPiles">刷新充电桩状态</button>
-      <select id="strategy">
-        <option value="PRIORITY">故障优先级调度</option>
-        <option value="TIME_ORDER">故障时间顺序调度</option>
-      </select>
-      <button id="btnSetStrategy" class="btn-secondary">更新调度策略</button>
-    </div>
-    <div class="form-grid cols-3">
-      <input id="pileId" placeholder="充电桩编号（如 F1 / T2）"/>
-      <select id="pileState">
-        <option value="WORKING">工作中</option>
-        <option value="SHUTDOWN">关闭</option>
-        <option value="FAULT">故障</option>
-      </select>
-      <button id="btnChangePileState">更新桩状态</button>
-    </div>
-    <div class="form-grid cols-3">
-      <input id="waitingAreaSize" placeholder="等候区容量 N"/>
-      <input id="chargingQueueLen" placeholder="队列长度 M"/>
-      <button id="btnUpdateConfig" class="btn-secondary">更新系统配置</button>
-    </div>
-    <div class="form-grid cols-3">
-      <input id="fastChargingPileNum" placeholder="快充桩数量"/>
-      <input id="slowChargingPileNum" placeholder="慢充桩数量"/>
-      <span></span>
-    </div>
-    <div class="form-grid cols-3">
-      <input id="fastPower" placeholder="快充速度(kWh/h)"/>
-      <input id="slowPower" placeholder="慢充速度(kWh/h)"/>
-      <span></span>
-    </div>
-    <div class="form-grid cols-3">
-      <select id="reportPeriod">
-        <option value="day">日报</option>
-        <option value="week">周报</option>
-        <option value="month">月报</option>
-      </select>
-      <button id="btnReport" class="btn-secondary">查看报表</button>
-    </div>
+    <main class="content">
+      <div class="content-header">
+        <div>
+          <h2>{{ currentTitle }}</h2>
+          <p>{{ currentSubtitle }}</p>
+        </div>
+        <div class="status-pill" :class="currentView === 'admin' ? 'neutral' : (user.loggedIn ? 'ok' : 'warn')">
+          {{ currentView === 'admin' ? '管理员模式' : (user.loggedIn ? '已登录' : '未登录') }}
+        </div>
+      </div>
 
-    <div id="adminMessage" class="message">就绪</div>
-    <div id="pileView" class="data-box"></div>
-    <div id="reportView" class="data-box"></div>
+      <div v-if="showMessage" class="message" :class="messageClass(currentMessage.type)">{{ currentMessage.text }}</div>
+
+      <div class="content-body">
+        <section v-if="currentView === 'user' && activeTab === 'panel'" class="card">
+        <div class="card-header">
+          <h3>充电请求</h3>
+          <button class="btn secondary" @click="refreshUserPanels">刷新用户数据</button>
+        </div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label>充电模式</label>
+            <select v-model="user.form.mode">
+              <option value="FAST">快充</option>
+              <option value="SLOW">慢充</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>电池容量 (kWh)</label>
+            <input v-model.number="user.form.batteryCapacityKwh" type="number" min="1"/>
+          </div>
+          <div class="field">
+            <label>请求电量 (kWh)</label>
+            <input v-model.number="user.form.requestKwh" type="number" min="1"/>
+          </div>
+        </div>
+        <div class="form-grid cols-2">
+          <div class="field">
+            <label>订单 ID (可选)</label>
+            <input v-model="user.form.requestId" placeholder="用于修改或取消"/>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div class="action-row">
+              <button class="btn primary" @click="submitRequest">提交请求</button>
+              <button class="btn ghost" @click="modifyRequest">修改请求</button>
+              <button class="btn danger" @click="cancelRequest">取消请求</button>
+              <button class="btn secondary" @click="endCharge">结束充电</button>
+            </div>
+          </div>
+        </div>
+        <div class="split-line"></div>
+        <div class="card-header">
+          <h3>订单列表</h3>
+          <button class="btn secondary" @click="refreshRequests">刷新订单</button>
+        </div>
+        <div class="table-wrap" v-if="requests.length">
+          <table>
+            <thead>
+            <tr>
+              <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>区域</th>
+              <th>电池容量</th><th>请求电量</th><th>前车</th><th>桩编号</th><th>入队时间</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="r in requests" :key="r.requestId" :class="{ active: String(r.requestId) === String(user.form.requestId) }"
+                @click="selectRequest(r)">
+              <td>{{ r.requestId }}</td>
+              <td>{{ r.queueNumber ?? '--' }}</td>
+              <td>{{ modeLabel(r.mode) }}</td>
+              <td>{{ statusLabel(r.status) }}</td>
+              <td>{{ queueAreaLabel(r.queueArea) }}</td>
+              <td>{{ r.batteryCapacityKwh ?? 0 }}</td>
+              <td>{{ r.requestKwh }}</td>
+              <td>{{ r.frontCars ?? 0 }}</td>
+              <td>{{ r.pileId ?? '--' }}</td>
+              <td>{{ formatDateTime(r.enqueueTime) }}</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty">暂无订单记录。</div>
+        </section>
+
+        <section v-if="currentView === 'user' && activeTab === 'bills'" class="card">
+        <!-- <div class="card-header">
+          <h3>充电详单</h3>
+          <button class="btn secondary" @click="refreshBills">刷新详单</button>
+        </div> -->
+        <div class="table-wrap" v-if="bills.length">
+          <table>
+            <thead>
+            <tr>
+              <th>详单号</th><th>生成时间</th><th>桩编号</th><th>电量</th><th>时长</th>
+              <th>开始时间</th><th>停止时间</th><th>充电费</th><th>服务费</th><th>总费用</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="b in bills" :key="b.billNo">
+              <td>{{ b.billNo }}</td>
+              <td>{{ formatDateTime(b.generatedAt) }}</td>
+              <td>{{ b.pileId }}</td>
+              <td>{{ b.chargedKwh }}</td>
+              <td>{{ b.chargedHours }}</td>
+              <td>{{ formatDateTime(b.startTime) }}</td>
+              <td>{{ formatDateTime(b.stopTime) }}</td>
+              <td>{{ b.chargeFee }}</td>
+              <td>{{ b.serviceFee }}</td>
+              <td>{{ b.totalFee }}</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty">暂无充电详单。</div>
+        </section>
+
+        <section v-if="currentView === 'admin' && activeTab === 'piles'" class="card">
+        <div class="card-header">
+          <h3>充电桩管理</h3>
+          <div class="header-actions">
+            <button class="btn secondary" @click="refreshPiles">刷新状态</button>
+            <button class="btn ghost" @click="togglePileControl">{{ showPileControl ? '收起操作' : '展开操作' }}</button>
+          </div>
+        </div>
+        <div v-if="showPileControl" class="form-grid cols-3">
+          <div class="field">
+            <label>充电桩编号</label>
+            <input v-model="admin.pileId" placeholder="如 F1 / T2"/>
+          </div>
+          <div class="field">
+            <label>状态</label>
+            <select v-model="admin.pileState">
+              <option value="WORKING">工作中</option>
+              <option value="SHUTDOWN">关闭</option>
+              <option value="FAULT">故障</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn primary" @click="changePileState">更新桩状态</button>
+          </div>
+          <div class="field">
+            <label>故障调度策略</label>
+            <select v-model="admin.strategy">
+              <option value="PRIORITY">故障优先级调度</option>
+              <option value="TIME_ORDER">故障时间顺序调度</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn secondary" @click="setStrategy">更新调度策略</button>
+          </div>
+        </div>
+        <div class="table-wrap" v-if="piles.length">
+          <table>
+            <thead>
+            <tr>
+              <th>充电桩编号</th><th>类型</th><th>状态</th><th>累计次数</th>
+              <th>累计时长(h)</th><th>累计电量(kWh)</th><th>排队数</th><th>等候车辆</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="p in piles" :key="p.pileId">
+              <td>{{ p.pileId }}</td>
+              <td>{{ modeLabel(p.mode) }}</td>
+              <td>{{ pileStateLabel(p.state) }}</td>
+              <td>{{ p.totalChargeCount }}</td>
+              <td>{{ p.totalChargeHours }}</td>
+              <td>{{ p.totalChargeKwh }}</td>
+              <td>{{ (p.queueCars || []).length }}</td>
+              <td>
+                <div v-if="(p.queueCars || []).length" class="mini-list">
+                  <div v-for="c in p.queueCars" :key="c.requestId">
+                    用户{{ c.userId }}，电池{{ c.batteryCapacityKwh }}kWh，
+                    请求{{ c.requestKwh }}kWh，排队{{ c.queuedMinutes }}分钟
+                  </div>
+                </div>
+                <span v-else>--</span>
+              </td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty">暂无充电桩数据。</div>
+        </section>
+
+        <section v-if="currentView === 'admin' && activeTab === 'config'" class="card">
+        <div class="card-header">
+          <h3>系统配置</h3>
+          <button class="btn secondary" @click="updateConfig">更新系统配置</button>
+        </div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label>等候区容量 N</label>
+            <input v-model.number="admin.waitingAreaSize" type="number" min="1"/>
+          </div>
+          <div class="field">
+            <label>队列长度 M</label>
+            <input v-model.number="admin.chargingQueueLen" type="number" min="1"/>
+          </div>
+          <div class="field"></div>
+        </div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label>快充桩数量</label>
+            <input v-model.number="admin.fastChargingPileNum" type="number" min="1"/>
+          </div>
+          <div class="field">
+            <label>慢充桩数量</label>
+            <input v-model.number="admin.slowChargingPileNum" type="number" min="1"/>
+          </div>
+          <div class="field"></div>
+        </div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label>快充速度 (kWh/h)</label>
+            <input v-model.number="admin.fastPower" type="number" min="1"/>
+          </div>
+          <div class="field">
+            <label>慢充速度 (kWh/h)</label>
+            <input v-model.number="admin.slowPower" type="number" min="1"/>
+          </div>
+          <div class="field"></div>
+        </div>
+        </section>
+
+        <section v-if="currentView === 'admin' && activeTab === 'report'" class="card">
+        <div class="card-header">
+          <h3>运营报表</h3>
+          <div class="header-actions">
+            <select v-model="admin.reportPeriod">
+              <option value="day">日报</option>
+              <option value="week">周报</option>
+              <option value="month">月报</option>
+            </select>
+            <button class="btn secondary" @click="refreshReport">查看报表</button>
+          </div>
+        </div>
+        <div class="table-wrap" v-if="report.length">
+          <table>
+            <thead>
+            <tr>
+              <th>统计周期</th><th>桩编号</th><th>累计次数</th><th>累计时长(h)</th>
+              <th>累计电量(kWh)</th><th>累计充电费</th><th>累计服务费</th><th>累计总费用</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="r in report" :key="`${r.period}-${r.pileId}`">
+              <td>{{ periodLabel(r.period) }}</td>
+              <td>{{ r.pileId }}</td>
+              <td>{{ r.totalChargeCount }}</td>
+              <td>{{ r.totalChargeHours }}</td>
+              <td>{{ r.totalChargeKwh }}</td>
+              <td>{{ r.totalChargeFee }}</td>
+              <td>{{ r.totalServiceFee }}</td>
+              <td>{{ r.totalFee }}</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="empty">暂无报表数据。</div>
+        </section>
+      </div>
+
+    </main>
   </section>
-</main>
+
+  <div v-if="showQueueModal" class="modal-mask" @click.self="closeQueueModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>排队信息</h3>
+        <button class="modal-close" @click="closeQueueModal">×</button>
+      </div>
+      <div v-if="queueInfo && queueInfo.active" class="info-grid">
+        <div><span>请求ID</span><strong>{{ queueInfo.requestId ?? '--' }}</strong></div>
+        <div><span>排队号</span><strong>{{ queueInfo.queueNumber ?? '--' }}</strong></div>
+        <div><span>充电模式</span><strong>{{ modeLabel(queueInfo.mode) }}</strong></div>
+        <div><span>前车数量</span><strong>{{ queueInfo.frontCars ?? 0 }}</strong></div>
+        <div><span>状态</span><strong>{{ statusLabel(queueInfo.status) }}</strong></div>
+        <div><span>所在区域</span><strong>{{ queueAreaLabel(queueInfo.queueArea) }}</strong></div>
+        <div><span>充电桩编号</span><strong>{{ queueInfo.pileId ?? '--' }}</strong></div>
+        <div><span>入队时间</span><strong>{{ formatDateTime(queueInfo.enqueueTime) }}</strong></div>
+        <div><span>启动时间</span><strong>{{ formatDateTime(queueInfo.startTime) }}</strong></div>
+        <div><span>预计完成</span><strong>{{ formatDateTime(queueInfo.expectedFinishTime) }}</strong></div>
+      </div>
+      <div v-else class="empty">{{ queueInfoHint }}</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>
