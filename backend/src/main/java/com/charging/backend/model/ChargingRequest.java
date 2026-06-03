@@ -15,6 +15,7 @@ public class ChargingRequest {
     private LocalDateTime chargeStartTime;
     private LocalDateTime chargeStopTime;
     private LocalDateTime expectedFinishTime;
+    private boolean faultInterrupted;
 
     public Long getId() {
         return id;
@@ -110,5 +111,13 @@ public class ChargingRequest {
 
     public void setExpectedFinishTime(LocalDateTime expectedFinishTime) {
         this.expectedFinishTime = expectedFinishTime;
+    }
+
+    public boolean isFaultInterrupted() {
+        return faultInterrupted;
+    }
+
+    public void setFaultInterrupted(boolean faultInterrupted) {
+        this.faultInterrupted = faultInterrupted;
     }
 }

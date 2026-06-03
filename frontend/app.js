@@ -16,6 +16,7 @@ const ZH = {
   userRefreshed: "用户端数据已刷新。",
   pilesRefreshed: "充电桩状态已刷新。",
   strategyOk: "调度策略已更新。",
+  dispatchStrategyOk: "扩展调度策略已更新。",
   pileStateOk: "充电桩状态已更新。",
   configOk: "系统配置已更新。",
   reportRefreshed: "报表已刷新。",
@@ -64,6 +65,7 @@ createApp({
       },
       admin: {
         strategy: "PRIORITY",
+        dispatchStrategy: "NORMAL",
         pileId: "",
         pileState: "WORKING",
         waitingAreaSize: null,
@@ -419,7 +421,7 @@ createApp({
         });
         this.systemTimeText = this.formatDateTime(res.data.systemTime);
         this.setMessage("admin", `${ZH.advanced}${minutes}${ZH.advancedSuffix}`, "success");
-        await this.refreshPiles();
+        await Promise.all([this.refreshPiles(), this.refreshReport()]);
         await this.refreshUserPanels();
       });
     },
@@ -444,6 +446,16 @@ createApp({
           body: JSON.stringify({ strategy: this.admin.strategy }),
         });
         this.setMessage("admin", ZH.strategyOk, "success");
+      });
+    },
+    async setDispatchStrategy() {
+      await this.safeRun("admin", async () => {
+        await this.request("/api/admin/dispatch-strategy", {
+          method: "POST",
+          body: JSON.stringify({ strategy: this.admin.dispatchStrategy }),
+        });
+        this.setMessage("admin", ZH.dispatchStrategyOk, "success");
+        await Promise.all([this.refreshPiles(), this.refreshUserPanels()]);
       });
     },
     async changePileState() {

@@ -1,6 +1,7 @@
 package com.charging.backend.controller;
 
 import com.charging.backend.dto.ApiResponse;
+import com.charging.backend.model.DispatchStrategy;
 import com.charging.backend.model.FaultDispatchStrategy;
 import com.charging.backend.model.PileState;
 import com.charging.backend.service.StationService;
@@ -51,6 +52,22 @@ public class AdminController {
     public ApiResponse<Map<String, Object>> getStrategy() {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("strategy", stationService.getFaultDispatchStrategy());
+        return ApiResponse.ok(data);
+    }
+
+    @PostMapping("/dispatch-strategy")
+    public ApiResponse<Map<String, Object>> setDispatchStrategy(@RequestBody Map<String, Object> body) {
+        DispatchStrategy strategy = DispatchStrategy.valueOf(str(body.get("strategy")).toUpperCase());
+        stationService.setDispatchStrategy(strategy);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("strategy", stationService.getDispatchStrategy());
+        return ApiResponse.ok("dispatch strategy updated", data);
+    }
+
+    @GetMapping("/dispatch-strategy")
+    public ApiResponse<Map<String, Object>> getDispatchStrategy() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("strategy", stationService.getDispatchStrategy());
         return ApiResponse.ok(data);
     }
 

@@ -197,13 +197,15 @@
           <table>
             <thead>
             <tr>
-              <th>详单号</th><th>生成时间</th><th>桩编号</th><th>电量</th><th>时长</th>
+              <th>详单号</th><th>订单号</th><th>详单状态</th><th>生成时间</th><th>桩编号</th><th>电量</th><th>时长</th>
               <th>开始时间</th><th>停止时间</th><th>充电费</th><th>服务费</th><th>总费用</th>
             </tr>
             </thead>
             <tbody>
             <tr v-for="b in bills" :key="b.billNo">
               <td>{{ b.billNo }}</td>
+              <td>{{ b.requestId ?? '--' }}</td>
+              <td>{{ b.billStatus ?? '--' }}</td>
               <td>{{ formatDateTime(b.generatedAt) }}</td>
               <td>{{ b.pileId }}</td>
               <td>{{ b.chargedKwh }}</td>
@@ -255,6 +257,18 @@
           <div class="field">
             <label>&nbsp;</label>
             <button class="btn secondary" @click="setStrategy">更新调度策略</button>
+          </div>
+          <div class="field">
+            <label>扩展调度策略</label>
+            <select v-model="admin.dispatchStrategy">
+              <option value="NORMAL">普通调度</option>
+              <option value="SINGLE_SHORTEST_TOTAL_TIME">单次调度总时长最短</option>
+              <option value="BATCH_SHORTEST_TOTAL_TIME">批量调度总时长最短</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn secondary" @click="setDispatchStrategy">更新扩展策略</button>
           </div>
         </div>
         <div class="table-wrap" v-if="piles.length">

@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 
 public class ChargeBill {
     private String billNo;
+    private Long requestId;
+    private String billStatus;
     private LocalDateTime generatedAt;
     private Long userId;
     private String pileId;
@@ -21,6 +23,22 @@ public class ChargeBill {
 
     public void setBillNo(String billNo) {
         this.billNo = billNo;
+    }
+
+    public Long getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(Long requestId) {
+        this.requestId = requestId;
+    }
+
+    public String getBillStatus() {
+        return billStatus;
+    }
+
+    public void setBillStatus(String billStatus) {
+        this.billStatus = billStatus;
     }
 
     public LocalDateTime getGeneratedAt() {

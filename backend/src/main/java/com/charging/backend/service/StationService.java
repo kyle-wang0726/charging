@@ -4,6 +4,7 @@ import com.charging.backend.model.ChargeBill;
 import com.charging.backend.model.ChargeMode;
 import com.charging.backend.model.ChargingPile;
 import com.charging.backend.model.ChargingRequest;
+import com.charging.backend.model.DispatchStrategy;
 import com.charging.backend.model.FaultDispatchStrategy;
 import com.charging.backend.model.PileState;
 import com.charging.backend.model.RequestStatus;
@@ -37,6 +38,7 @@ public class StationService {
     private int slowQueueSeq = 1;
 
     private FaultDispatchStrategy faultDispatchStrategy = FaultDispatchStrategy.PRIORITY;
+    private DispatchStrategy dispatchStrategy = DispatchStrategy.NORMAL;
     private LocalDateTime systemNow = LocalDateTime.of(2026, 6, 1, 8, 0, 0);
 
     private final Map<Long, UserAccount> users = new LinkedHashMap<>();
@@ -49,6 +51,7 @@ public class StationService {
     private final List<Long> waitingSlow = new ArrayList<>();
     private final List<Long> faultPriorityFast = new ArrayList<>();
     private final List<Long> faultPrioritySlow = new ArrayList<>();
+    private final List<Long> batchWaitingOrder = new ArrayList<>();
 
     public StationService(BillingService billingService) {
         this.billingService = billingService;
@@ -83,7 +86,7 @@ public class StationService {
         refreshAndDispatch(now());
         validateUser(userId);
         validateRequestAmounts(requestKwh, batteryCapacityKwh);
-        if (waitingFast.size() + waitingSlow.size() + faultPriorityFast.size() + faultPrioritySlow.size() >= config.getWaitingAreaSize()) {
+        if (stationLoadForAdmission() >= admissionCapacity()) {
             throw new IllegalArgumentException("waiting area is full, cannot create request");
         }
         ChargingRequest req = new ChargingRequest();
@@ -148,6 +151,7 @@ public class StationService {
         if (req.getStatus() == RequestStatus.WAITING_AREA) {
             waitingListByMode(req.getMode()).remove(req.getId());
             faultPriorityByMode(req.getMode()).remove(req.getId());
+            batchWaitingOrder.remove(req.getId());
             createCancelBill(req, now());
             req.setStatus(RequestStatus.CANCELED);
             return;
@@ -166,7 +170,7 @@ public class StationService {
         if (req.getStatus() == RequestStatus.CHARGING) {
             ChargingPile pile = piles.get(req.getPileId());
             if (pile != null) {
-                buildAndStoreBill(req, pile, now());
+                buildAndStoreBill(req, pile, now(), "提前结束");
                 pile.getQueueRequestIds().remove(req.getId());
             }
             req.setStatus(RequestStatus.CANCELED);
@@ -182,7 +186,7 @@ public class StationService {
             throw new IllegalArgumentException("request is not charging");
         }
         ChargingPile pile = piles.get(req.getPileId());
-        ChargeBill bill = buildAndStoreBill(req, pile, now());
+        ChargeBill bill = buildAndStoreBill(req, pile, now(), "提前结束");
         req.setStatus(RequestStatus.COMPLETED);
         pile.getQueueRequestIds().remove(req.getId());
         refreshAndDispatch(now());
@@ -325,6 +329,19 @@ public class StationService {
         return faultDispatchStrategy;
     }
 
+    public synchronized void setDispatchStrategy(DispatchStrategy strategy) {
+        if (this.dispatchStrategy == DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME
+                && strategy != DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME) {
+            releaseBatchWaitingToModeQueues();
+        }
+        this.dispatchStrategy = strategy == null ? DispatchStrategy.NORMAL : strategy;
+        refreshAndDispatch(now());
+    }
+
+    public synchronized DispatchStrategy getDispatchStrategy() {
+        return dispatchStrategy;
+    }
+
     public synchronized SystemConfig getConfig() {
         return config;
     }
@@ -393,6 +410,24 @@ public class StationService {
                 serviceFee += bill.getServiceFee();
                 totalFee += bill.getTotalFee();
             }
+            for (ChargingRequest req : requests.values()) {
+                if (req.getStatus() != RequestStatus.CHARGING || !Objects.equals(req.getPileId(), pile.getId())) {
+                    continue;
+                }
+                LocalDateTime stop = current;
+                if (req.getExpectedFinishTime() != null && req.getExpectedFinishTime().isBefore(stop)) {
+                    stop = req.getExpectedFinishTime();
+                }
+                ChargeBill active = buildPreviewBill(req, pile, stop);
+                if (!inPeriod(active.getGeneratedAt(), current, period)) {
+                    continue;
+                }
+                hours += active.getChargedHours();
+                kwh += active.getChargedKwh();
+                chargeFee += active.getChargeFee();
+                serviceFee += active.getServiceFee();
+                totalFee += active.getTotalFee();
+            }
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("period", (period == null ? "day" : period).toUpperCase(Locale.ROOT));
             row.put("pileId", pile.getId());
@@ -453,10 +488,11 @@ public class StationService {
             Long firstId = faultPile.getQueueRequestIds().get(0);
             ChargingRequest chargingReq = requests.get(firstId);
             if (chargingReq != null && chargingReq.getStatus() == RequestStatus.CHARGING) {
-                ChargeBill partial = buildAndStoreBill(chargingReq, faultPile, now());
+                ChargeBill partial = buildAndStoreBill(chargingReq, faultPile, now(), "故障中断");
                 double remaining = round(Math.max(0.0, chargingReq.getRequestedKwh() - partial.getChargedKwh()));
                 faultPile.getQueueRequestIds().remove(0);
                 if (remaining > 0.0) {
+                    chargingReq.setFaultInterrupted(true);
                     chargingReq.setRequestedKwh(remaining);
                     chargingReq.setStatus(RequestStatus.WAITING_AREA);
                     chargingReq.setPileId(null);
@@ -546,7 +582,7 @@ public class StationService {
                 continue;
             }
             if (req.getStatus() == RequestStatus.CHARGING) {
-                buildAndStoreBill(req, pile, now());
+                buildAndStoreBill(req, pile, now(), "提前结束");
                 req.setStatus(RequestStatus.COMPLETED);
                 continue;
             }
@@ -570,14 +606,21 @@ public class StationService {
                         || first.getExpectedFinishTime().isAfter(currentTime)) {
                     break;
                 }
-                buildAndStoreBill(first, pile, first.getExpectedFinishTime());
+                buildAndStoreBill(first, pile, first.getExpectedFinishTime(), completionStatus(first));
                 first.setStatus(RequestStatus.COMPLETED);
                 pile.getQueueRequestIds().remove(0);
             }
             startFirstIfNeeded(pile, currentTime);
         }
-        dispatchByMode(ChargeMode.FAST, currentTime);
-        dispatchByMode(ChargeMode.SLOW, currentTime);
+        if (dispatchStrategy == DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME) {
+            dispatchBatchShortest(currentTime);
+        } else if (dispatchStrategy == DispatchStrategy.SINGLE_SHORTEST_TOTAL_TIME) {
+            dispatchSingleShortestByMode(ChargeMode.FAST, currentTime);
+            dispatchSingleShortestByMode(ChargeMode.SLOW, currentTime);
+        } else {
+            dispatchByMode(ChargeMode.FAST, currentTime);
+            dispatchByMode(ChargeMode.SLOW, currentTime);
+        }
     }
 
     private void dispatchByMode(ChargeMode mode, LocalDateTime currentTime) {
@@ -603,6 +646,105 @@ public class StationService {
             startFirstIfNeeded(bestPile, currentTime);
             moved = true;
         }
+    }
+
+    private void dispatchSingleShortestByMode(ChargeMode mode, LocalDateTime currentTime) {
+        int freeSlots = freeSlotsByMode(mode);
+        if (freeSlots <= 0) {
+            return;
+        }
+        List<Long> selected = pollDispatchableBatchByMode(mode, freeSlots, freeSlots > 1);
+        for (Long requestId : selected) {
+            ChargingRequest req = requests.get(requestId);
+            if (req == null || req.getStatus() == RequestStatus.CANCELED || req.getStatus() == RequestStatus.COMPLETED) {
+                continue;
+            }
+            ChargingPile bestPile = chooseBestPile(mode, currentTime);
+            if (bestPile == null || bestPile.getQueueRequestIds().size() >= config.getChargingQueueLen()) {
+                prependDispatchable(mode, requestId);
+                break;
+            }
+            req.setStatus(RequestStatus.QUEUED);
+            req.setPileId(bestPile.getId());
+            bestPile.getQueueRequestIds().add(req.getId());
+            startFirstIfNeeded(bestPile, currentTime);
+        }
+    }
+
+    private void dispatchBatchShortest(LocalDateTime currentTime) {
+        if (batchWaitingOrder.isEmpty()) {
+            if (hasChargingAreaRequests()) {
+                return;
+            }
+            if (waitingStationLoad() < totalStationCapacity()) {
+                return;
+            }
+            batchWaitingOrder.addAll(pollAllWaitingRequests());
+            batchWaitingOrder.sort(Comparator
+                    .comparingDouble((Long id) -> requestOrMax(id).getRequestedKwh())
+                    .thenComparingLong(id -> id));
+        }
+
+        while (!batchWaitingOrder.isEmpty()) {
+            ChargingPile bestPile = chooseBestAnyPileForBatch(batchWaitingOrder.get(0), currentTime);
+            if (bestPile == null || bestPile.getQueueRequestIds().size() >= config.getChargingQueueLen()) {
+                break;
+            }
+            Long id = batchWaitingOrder.remove(0);
+            ChargingRequest req = requests.get(id);
+            if (req == null || req.getStatus() == RequestStatus.CANCELED || req.getStatus() == RequestStatus.COMPLETED) {
+                continue;
+            }
+            req.setMode(bestPile.getMode());
+            req.setStatus(RequestStatus.QUEUED);
+            req.setPileId(bestPile.getId());
+            bestPile.getQueueRequestIds().add(id);
+            startFirstIfNeeded(bestPile, currentTime);
+        }
+    }
+
+    private List<Long> pollDispatchableBatchByMode(ChargeMode mode, int limit, boolean shortestFirst) {
+        List<Long> result = new ArrayList<>();
+        List<Long> combined = new ArrayList<>();
+        combined.addAll(faultPriorityByMode(mode));
+        combined.addAll(waitingListByMode(mode));
+        if (shortestFirst) {
+            combined.sort(Comparator
+                    .comparingLong((Long id) -> durationSeconds(requests.get(id)))
+                    .thenComparingLong(id -> id));
+        }
+        for (Long id : combined) {
+            if (result.size() >= limit) {
+                break;
+            }
+            if (faultPriorityByMode(mode).remove(id) || waitingListByMode(mode).remove(id)) {
+                result.add(id);
+            }
+        }
+        return result;
+    }
+
+    private List<Long> pollAllWaitingRequests() {
+        List<Long> ids = new ArrayList<>();
+        ids.addAll(faultPriorityFast);
+        ids.addAll(faultPrioritySlow);
+        ids.addAll(waitingFast);
+        ids.addAll(waitingSlow);
+        faultPriorityFast.clear();
+        faultPrioritySlow.clear();
+        waitingFast.clear();
+        waitingSlow.clear();
+        return ids;
+    }
+
+    private void releaseBatchWaitingToModeQueues() {
+        for (Long id : new ArrayList<>(batchWaitingOrder)) {
+            ChargingRequest req = requests.get(id);
+            if (req != null && req.getStatus() == RequestStatus.WAITING_AREA) {
+                waitingListByMode(req.getMode()).add(id);
+            }
+        }
+        batchWaitingOrder.clear();
     }
 
     private Long pollNextDispatchable(ChargeMode mode) {
@@ -673,11 +815,60 @@ public class StationService {
         return best;
     }
 
-    private ChargeBill buildAndStoreBill(ChargingRequest req, ChargingPile pile, LocalDateTime stopAt) {
+    private ChargingPile chooseBestAnyPileForBatch(Long requestId, LocalDateTime currentTime) {
+        ChargingRequest target = requests.get(requestId);
+        if (target == null) {
+            return null;
+        }
+        double minFinishHours = Double.MAX_VALUE;
+        ChargingPile best = null;
+        for (ChargingPile pile : piles.values()) {
+            if (pile.getState() != PileState.WORKING || pile.getQueueRequestIds().size() >= config.getChargingQueueLen()) {
+                continue;
+            }
+            double tailHours = pileTailHours(pile, currentTime);
+            double finishHours = tailHours + target.getRequestedKwh() / powerByMode(pile.getMode());
+            if (finishHours < minFinishHours || (Math.abs(finishHours - minFinishHours) < 0.0001
+                    && (best == null || pile.getId().compareTo(best.getId()) < 0))) {
+                minFinishHours = finishHours;
+                best = pile;
+            }
+        }
+        return best;
+    }
+
+    private double pileTailHours(ChargingPile pile, LocalDateTime currentTime) {
+        double waitHours = 0.0;
+        for (Long requestId : pile.getQueueRequestIds()) {
+            ChargingRequest req = requests.get(requestId);
+            if (req == null) {
+                continue;
+            }
+            if (req.getStatus() == RequestStatus.CHARGING && req.getExpectedFinishTime() != null) {
+                double rem = Duration.between(currentTime, req.getExpectedFinishTime()).toSeconds() / 3600.0;
+                waitHours += Math.max(0, rem);
+            } else if (req.getStatus() == RequestStatus.QUEUED) {
+                waitHours += req.getRequestedKwh() / powerByMode(pile.getMode());
+            }
+        }
+        return waitHours;
+    }
+
+    private ChargingRequest requestOrMax(Long id) {
+        ChargingRequest req = requests.get(id);
+        if (req != null) {
+            return req;
+        }
+        ChargingRequest placeholder = new ChargingRequest();
+        placeholder.setRequestedKwh(Double.MAX_VALUE);
+        return placeholder;
+    }
+
+    private ChargeBill buildAndStoreBill(ChargingRequest req, ChargingPile pile, LocalDateTime stopAt, String billStatus) {
         req.setChargeStopTime(stopAt);
         double power = powerByMode(req.getMode());
         ChargeBill bill = billingService.buildBill(
-                "B" + billSeq.getAndIncrement() + "-R" + req.getId(),
+                "B" + billSeq.getAndIncrement(),
                 req.getUserId(),
                 pile.getId(),
                 req.getChargeStartTime(),
@@ -686,6 +877,8 @@ public class StationService {
                 req.getRequestedKwh(),
                 config
         );
+        bill.setRequestId(req.getId());
+        bill.setBillStatus(billStatus);
         bills.add(bill);
         pile.setTotalChargeCount(pile.getTotalChargeCount() + 1);
         pile.setTotalChargeHours(pile.getTotalChargeHours() + bill.getChargedHours());
@@ -695,7 +888,7 @@ public class StationService {
 
     private ChargeBill createCancelBill(ChargingRequest req, LocalDateTime at) {
         ChargeBill bill = billingService.buildBill(
-                "B" + billSeq.getAndIncrement() + "-R" + req.getId(),
+                "B" + billSeq.getAndIncrement(),
                 req.getUserId(),
                 req.getPileId() == null ? "-" : req.getPileId(),
                 req.getChargeStartTime(),
@@ -704,8 +897,30 @@ public class StationService {
                 req.getRequestedKwh(),
                 config
         );
+        bill.setRequestId(req.getId());
+        bill.setBillStatus("已取消");
         bills.add(bill);
         return bill;
+    }
+
+    private ChargeBill buildPreviewBill(ChargingRequest req, ChargingPile pile, LocalDateTime stopAt) {
+        ChargeBill bill = billingService.buildBill(
+                "PREVIEW",
+                req.getUserId(),
+                pile.getId(),
+                req.getChargeStartTime(),
+                stopAt,
+                powerByMode(req.getMode()),
+                req.getRequestedKwh(),
+                config
+        );
+        bill.setRequestId(req.getId());
+        bill.setBillStatus("充电中");
+        return bill;
+    }
+
+    private String completionStatus(ChargingRequest req) {
+        return req.isFaultInterrupted() ? "已完成（故障后）" : "已完成";
     }
 
     private String nextQueueNumber(ChargeMode mode) {
@@ -733,6 +948,52 @@ public class StationService {
         if (requestKwh > batteryCapacityKwh) {
             throw new IllegalArgumentException("request kwh cannot exceed battery capacity");
         }
+    }
+
+    private int admissionCapacity() {
+        if (dispatchStrategy == DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME) {
+            return totalStationCapacity();
+        }
+        return config.getWaitingAreaSize();
+    }
+
+    private int stationLoadForAdmission() {
+        if (dispatchStrategy == DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME) {
+            return (int) requests.values().stream().filter(this::isActive).count();
+        }
+        return waitingStationLoad();
+    }
+
+    private int waitingStationLoad() {
+        return waitingFast.size()
+                + waitingSlow.size()
+                + faultPriorityFast.size()
+                + faultPrioritySlow.size()
+                + batchWaitingOrder.size();
+    }
+
+    private int totalStationCapacity() {
+        return config.getWaitingAreaSize()
+                + (config.getFastChargingPileNum() + config.getSlowChargingPileNum()) * config.getChargingQueueLen();
+    }
+
+    private int freeSlotsByMode(ChargeMode mode) {
+        int free = 0;
+        for (ChargingPile pile : piles.values()) {
+            if (pile.getMode() == mode && pile.getState() == PileState.WORKING) {
+                free += Math.max(0, config.getChargingQueueLen() - pile.getQueueRequestIds().size());
+            }
+        }
+        return free;
+    }
+
+    private boolean hasChargingAreaRequests() {
+        for (ChargingPile pile : piles.values()) {
+            if (!pile.getQueueRequestIds().isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isActive(ChargingRequest req) {
@@ -875,14 +1136,19 @@ public class StationService {
             return 0;
         }
         if (req.getStatus() == RequestStatus.WAITING_AREA) {
+            int chargingAreaFront = countChargingAreaByMode(req.getMode());
+            int batchIndex = batchWaitingOrder.indexOf(req.getId());
+            if (batchIndex >= 0) {
+                return chargingAreaFront + batchIndex;
+            }
             List<Long> priority = faultPriorityByMode(req.getMode());
             int p = priority.indexOf(req.getId());
             if (p >= 0) {
-                return p;
+                return chargingAreaFront + p;
             }
             List<Long> waiting = waitingListByMode(req.getMode());
             int w = waiting.indexOf(req.getId());
-            return w < 0 ? priority.size() : priority.size() + w;
+            return chargingAreaFront + (w < 0 ? priority.size() : priority.size() + w);
         }
         if (req.getPileId() != null) {
             ChargingPile pile = piles.get(req.getPileId());
@@ -903,6 +1169,19 @@ public class StationService {
             }
             if (queueOrder(other.getId()) < currentOrder) {
                 count++;
+            }
+        }
+        return count;
+    }
+
+    private int countChargingAreaByMode(ChargeMode mode) {
+        int count = 0;
+        for (ChargingPile pile : piles.values()) {
+            for (Long id : pile.getQueueRequestIds()) {
+                ChargingRequest other = requests.get(id);
+                if (other != null && other.getMode() == mode && isActive(other)) {
+                    count++;
+                }
             }
         }
         return count;
