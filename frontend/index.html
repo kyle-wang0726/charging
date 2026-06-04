@@ -13,12 +13,12 @@
       <button class="switch-btn" :class="{ active: currentView === 'user' }" @click="setView('user')">用户端</button>
       <button class="switch-btn" :class="{ active: currentView === 'admin' }" @click="setView('admin')">管理端</button>
     </div>
-    <div class="time-module">
+    <div class="time-module" v-if="currentView === 'admin' || user.loggedIn">
       <div class="time-main">
         <strong>{{ systemTimeText }}</strong>
       </div>
       <div class="time-actions">
-        <button class="btn ghost" @click="refreshSystemTime">刷新</button>
+        <!-- <button class="btn ghost" @click="refreshSystemTime">刷新</button> -->
         <button class="btn primary" @click="advanceMinutes(10)">+10分钟</button>
         <button class="btn ghost" @click="advanceMinutes(30)">+30分钟</button>
         <button class="btn ghost" @click="advanceMinutes(60)">+1小时</button>
@@ -258,6 +258,7 @@
             <label>&nbsp;</label>
             <button class="btn secondary" @click="setStrategy">更新调度策略</button>
           </div>
+          <br/>
           <div class="field">
             <label>扩展调度策略</label>
             <select v-model="admin.dispatchStrategy">
@@ -271,6 +272,7 @@
             <button class="btn secondary" @click="setDispatchStrategy">更新扩展策略</button>
           </div>
         </div>
+          <br/>
         <div class="table-wrap" v-if="piles.length">
           <table>
             <thead>
