@@ -109,7 +109,7 @@ createApp({
         panel: "提交与管理充电请求，并查看订单列表。",
         bills: "查看充电详单与费用。",
         piles: "启动、关闭充电桩并查看排队车辆。",
-        config: "更新系统容量与功率配置。",
+        config: "更新调度策略、系统容量、功率配置。",
         report: "查看日、周、月度报表。",
       };
       return map[this.activeTab] || "";
