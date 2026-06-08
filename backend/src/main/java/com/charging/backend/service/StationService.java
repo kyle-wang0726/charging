@@ -363,6 +363,7 @@ public class StationService {
         }
         if (targetState == PileState.FAULT) {
             handlePileFault(pile);
+            refreshAndDispatch(now());
             logCurrentState();
             return;
         }
