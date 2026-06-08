@@ -139,7 +139,12 @@
             <label>请求电量 (kWh)</label>
             <input v-model.number="user.form.requestKwh" type="number" min="1"/>
           </div>
+          <div class="field">
+            <label>车辆编号</label>
+            <input v-model="user.form.vehicleNumber" placeholder="如 京A12345"/>
+          </div>
         </div>
+        <br/>
         <div class="form-grid cols-2">
           <div class="field">
             <label>订单 ID (可选)</label>
@@ -165,7 +170,7 @@
             <thead>
             <tr>
               <th>订单ID</th><th>排队号</th><th>模式</th><th>状态</th><th>区域</th>
-              <th>电池容量</th><th>请求电量</th><th>前车</th><th>桩编号</th><th>入队时间</th>
+              <th>电池容量</th><th>请求电量</th><th>车辆编号</th><th>前车</th><th>桩编号</th><th>入队时间</th>
             </tr>
             </thead>
             <tbody>
@@ -178,6 +183,7 @@
               <td>{{ queueAreaLabel(r.queueArea) }}</td>
               <td>{{ r.batteryCapacityKwh ?? 0 }}</td>
               <td>{{ r.requestKwh }}</td>
+              <td>{{ r.vehicleNumber ?? '--' }}</td>
               <td>{{ r.frontCars ?? 0 }}</td>
               <td>{{ r.pileId ?? '--' }}</td>
               <td>{{ formatDateTime(r.enqueueTime) }}</td>
@@ -197,7 +203,7 @@
           <table>
             <thead>
             <tr>
-              <th>详单号</th><th>订单号</th><th>详单状态</th><th>生成时间</th><th>桩编号</th><th>电量</th><th>时长</th>
+              <th>详单号</th><th>订单号</th><th>车辆编号</th><th>详单状态</th><th>生成时间</th><th>桩编号</th><th>电量</th><th>时长</th>
               <th>开始时间</th><th>停止时间</th><th>充电费</th><th>服务费</th><th>总费用</th>
             </tr>
             </thead>
@@ -205,6 +211,7 @@
             <tr v-for="b in bills" :key="b.billNo">
               <td>{{ b.billNo }}</td>
               <td>{{ b.requestId ?? '--' }}</td>
+              <td>{{ b.vehicleNumber ?? '--' }}</td>
               <td>{{ b.billStatus ?? '--' }}</td>
               <td>{{ formatDateTime(b.generatedAt) }}</td>
               <td>{{ b.pileId }}</td>
@@ -269,7 +276,7 @@
               <td>
                 <div v-if="(p.queueCars || []).length" class="mini-list">
                   <div v-for="c in p.queueCars" :key="c.requestId">
-                    用户{{ c.userId }}，电池{{ c.batteryCapacityKwh }}kWh，
+                    用户{{ c.userId }}，车辆{{ c.vehicleNumber ?? '--' }}，电池{{ c.batteryCapacityKwh }}kWh，
                     请求{{ c.requestKwh }}kWh，排队{{ c.queuedMinutes }}分钟
                   </div>
                 </div>
@@ -401,6 +408,8 @@
         <div><span>入队时间</span><strong>{{ formatDateTime(queueInfo.enqueueTime) }}</strong></div>
         <div><span>启动时间</span><strong>{{ formatDateTime(queueInfo.startTime) }}</strong></div>
         <div><span>预计完成</span><strong>{{ formatDateTime(queueInfo.expectedFinishTime) }}</strong></div>
+        <div v-if="queueInfo.status === 'CHARGING'"><span>已充电量</span><strong>{{ queueInfo.chargedKwh ?? 0 }} kWh</strong></div>
+        <div v-if="queueInfo.status === 'CHARGING'"><span>已花费费用</span><strong>{{ queueInfo.chargedFee ?? 0 }} 元</strong></div>
       </div>
       <div v-else class="empty">{{ queueInfoHint }}</div>
     </div>

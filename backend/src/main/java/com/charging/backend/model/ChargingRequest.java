@@ -15,6 +15,7 @@ public class ChargingRequest {
     private LocalDateTime chargeStartTime;
     private LocalDateTime chargeStopTime;
     private LocalDateTime expectedFinishTime;
+    private String vehicleNumber;
     private boolean faultInterrupted;
 
     public Long getId() {
@@ -111,6 +112,14 @@ public class ChargingRequest {
 
     public void setExpectedFinishTime(LocalDateTime expectedFinishTime) {
         this.expectedFinishTime = expectedFinishTime;
+    }
+
+    public String getVehicleNumber() {
+        return vehicleNumber;
+    }
+
+    public void setVehicleNumber(String vehicleNumber) {
+        this.vehicleNumber = vehicleNumber;
     }
 
     public boolean isFaultInterrupted() {

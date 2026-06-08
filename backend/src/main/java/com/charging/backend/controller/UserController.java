@@ -33,7 +33,8 @@ public class UserController {
         ChargeMode mode = ChargeMode.valueOf(str(body.get("mode")).toUpperCase());
         double requestKwh = doubleNum(body.get("requestKwh"));
         double batteryCapacityKwh = doubleNum(body.get("batteryCapacityKwh"));
-        ChargingRequest req = stationService.submitRequest(userId, mode, requestKwh, batteryCapacityKwh);
+        String vehicleNumber = str(body.get("vehicleNumber"));
+        ChargingRequest req = stationService.submitRequest(userId, mode, requestKwh, batteryCapacityKwh, vehicleNumber);
         return ApiResponse.ok("request submitted", requestData(req));
     }
 
@@ -100,6 +101,7 @@ public class UserController {
         data.put("requestId", req.getId());
         data.put("queueNumber", req.getQueueNumber());
         data.put("mode", req.getMode());
+        data.put("vehicleNumber", req.getVehicleNumber());
         data.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
         data.put("requestKwh", req.getRequestedKwh());
         data.put("status", req.getStatus());

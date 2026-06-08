@@ -39,7 +39,7 @@ public class StationService {
 
     private FaultDispatchStrategy faultDispatchStrategy = FaultDispatchStrategy.PRIORITY;
     private DispatchStrategy dispatchStrategy = DispatchStrategy.NORMAL;
-    private LocalDateTime systemNow = LocalDateTime.of(2026, 6, 1, 8, 0, 0);
+    private LocalDateTime systemNow = LocalDateTime.of(2026, 6, 1, 6, 0, 0);
 
     private final Map<Long, UserAccount> users = new LinkedHashMap<>();
     private final Map<String, UserAccount> userByName = new LinkedHashMap<>();
@@ -82,9 +82,12 @@ public class StationService {
         return user;
     }
 
-    public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh, double batteryCapacityKwh) {
+    public synchronized ChargingRequest submitRequest(Long userId, ChargeMode mode, double requestKwh, double batteryCapacityKwh, String vehicleNumber) {
         refreshAndDispatch(now());
         validateUser(userId);
+        if (vehicleNumber == null || vehicleNumber.trim().isEmpty()) {
+            throw new IllegalArgumentException("vehicle number cannot be empty");
+        }
         validateRequestAmounts(requestKwh, batteryCapacityKwh);
         if (stationLoadForAdmission() >= admissionCapacity()) {
             throw new IllegalArgumentException("waiting area is full, cannot create request");
@@ -95,6 +98,7 @@ public class StationService {
         req.setMode(mode);
         req.setBatteryCapacityKwh(batteryCapacityKwh);
         req.setRequestedKwh(requestKwh);
+        req.setVehicleNumber(vehicleNumber.trim());
         req.setQueueNumber(nextQueueNumber(mode));
         req.setStatus(RequestStatus.WAITING_AREA);
         req.setEnqueueTime(now());
@@ -224,6 +228,20 @@ public class StationService {
         data.put("startTime", estimated[0]);
         data.put("expectedFinishTime", estimated[1]);
         data.put("systemTime", now());
+        if (req.getStatus() == RequestStatus.CHARGING) {
+            ChargingPile pile = piles.get(req.getPileId());
+            if (pile != null) {
+                ChargeBill preview = buildPreviewBill(req, pile, now());
+                data.put("chargedKwh", preview.getChargedKwh());
+                data.put("chargedFee", preview.getTotalFee());
+            } else {
+                data.put("chargedKwh", 0);
+                data.put("chargedFee", 0);
+            }
+        } else {
+            data.put("chargedKwh", 0);
+            data.put("chargedFee", 0);
+        }
         data.put("multipleActiveRequests", findActiveRequestsByUser(userId).size() > 1);
         return data;
     }
@@ -247,6 +265,7 @@ public class StationService {
             item.put("requestKwh", req.getRequestedKwh());
             item.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
             item.put("pileId", req.getPileId());
+            item.put("vehicleNumber", req.getVehicleNumber());
             item.put("queueArea", queueAreaOf(req));
             item.put("inFaultQueue", isInFaultPriorityQueue(req));
             item.put("frontCars", countFrontCars(req));
@@ -287,6 +306,7 @@ public class StationService {
                 car.put("requestId", req.getId());
                 car.put("batteryCapacityKwh", req.getBatteryCapacityKwh());
                 car.put("requestKwh", req.getRequestedKwh());
+                car.put("vehicleNumber", req.getVehicleNumber());
                 car.put("queueNumber", req.getQueueNumber());
                 car.put("status", req.getStatus());
                 car.put("queuedMinutes", req.getEnqueueTime() == null ? 0 : Duration.between(req.getEnqueueTime(), now()).toMinutes());
@@ -879,6 +899,7 @@ public class StationService {
         );
         bill.setRequestId(req.getId());
         bill.setBillStatus(billStatus);
+        bill.setVehicleNumber(req.getVehicleNumber());
         bills.add(bill);
         pile.setTotalChargeCount(pile.getTotalChargeCount() + 1);
         pile.setTotalChargeHours(pile.getTotalChargeHours() + bill.getChargedHours());
@@ -899,6 +920,7 @@ public class StationService {
         );
         bill.setRequestId(req.getId());
         bill.setBillStatus("已取消");
+        bill.setVehicleNumber(req.getVehicleNumber());
         bills.add(bill);
         return bill;
     }
@@ -916,6 +938,7 @@ public class StationService {
         );
         bill.setRequestId(req.getId());
         bill.setBillStatus("充电中");
+        bill.setVehicleNumber(req.getVehicleNumber());
         return bill;
     }
 

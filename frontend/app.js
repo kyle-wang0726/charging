@@ -60,6 +60,7 @@ createApp({
           mode: "FAST",
           batteryCapacityKwh: 60,
           requestKwh: 30,
+          vehicleNumber: "",
           requestId: "",
         },
       },
@@ -161,6 +162,7 @@ createApp({
         ["multiple waiting-area requests, requestId is required", "存在多个可修改订单，请填写 requestId。"],
         ["no charging request to end", "当前没有正在充电的订单。"],
         ["request is not charging", "该订单当前不在充电中。"],
+        ["vehicle number cannot be empty", "车辆编号不能为空。"],
         ["user not found", "用户不存在。"],
         ["pile not found", "充电桩不存在。"],
         ["cannot change pile count while requests are active", "存在进行中的订单时，不可修改充电桩数量。"],
@@ -314,6 +316,7 @@ createApp({
             mode: this.user.form.mode,
             batteryCapacityKwh: Number(this.user.form.batteryCapacityKwh),
             requestKwh: Number(this.user.form.requestKwh),
+            vehicleNumber: String(this.user.form.vehicleNumber).trim(),
           }),
         });
         if (res?.data?.requestId) this.user.form.requestId = String(res.data.requestId);

@@ -13,6 +13,7 @@ public class ChargeBill {
     private double chargedHours;
     private LocalDateTime startTime;
     private LocalDateTime stopTime;
+    private String vehicleNumber;
     private double chargeFee;
     private double serviceFee;
     private double totalFee;
@@ -95,6 +96,14 @@ public class ChargeBill {
 
     public void setStopTime(LocalDateTime stopTime) {
         this.stopTime = stopTime;
+    }
+
+    public String getVehicleNumber() {
+        return vehicleNumber;
+    }
+
+    public void setVehicleNumber(String vehicleNumber) {
+        this.vehicleNumber = vehicleNumber;
     }
 
     public double getChargeFee() {
