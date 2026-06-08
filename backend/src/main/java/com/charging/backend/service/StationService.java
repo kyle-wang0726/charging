@@ -10,8 +10,14 @@ import com.charging.backend.model.PileState;
 import com.charging.backend.model.RequestStatus;
 import com.charging.backend.model.SystemConfig;
 import com.charging.backend.model.UserAccount;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -40,6 +46,27 @@ public class StationService {
     private FaultDispatchStrategy faultDispatchStrategy = FaultDispatchStrategy.PRIORITY;
     private DispatchStrategy dispatchStrategy = DispatchStrategy.NORMAL;
     private LocalDateTime systemNow = LocalDateTime.of(2026, 6, 1, 6, 0, 0);
+
+    @Value("${log.file-path:./logs/log.txt}")
+    private String logFilePath;
+
+    @PostConstruct
+    public void initLogFile() {
+        try {
+            File file = new File(logFilePath);
+            File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            try (PrintWriter pw = new PrintWriter(new FileWriter(file, false))) {
+                pw.println("=== 充电系统日志 ===");
+                pw.println("启动时间: " + systemNow);
+                pw.println();
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to init log file: " + e.getMessage());
+        }
+    }
 
     private final Map<Long, UserAccount> users = new LinkedHashMap<>();
     private final Map<String, UserAccount> userByName = new LinkedHashMap<>();
@@ -105,6 +132,7 @@ public class StationService {
         requests.put(req.getId(), req);
         waitingListByMode(mode).add(req.getId());
         refreshAndDispatch(now());
+        logCurrentState();
         return req;
     }
 
@@ -146,6 +174,7 @@ public class StationService {
             req.setRequestedKwh(requestKwh);
         }
         refreshAndDispatch(now());
+        logCurrentState();
         return req;
     }
 
@@ -158,6 +187,7 @@ public class StationService {
             batchWaitingOrder.remove(req.getId());
             createCancelBill(req, now());
             req.setStatus(RequestStatus.CANCELED);
+            logCurrentState();
             return;
         }
         if (req.getStatus() == RequestStatus.QUEUED) {
@@ -169,6 +199,7 @@ public class StationService {
             req.setStatus(RequestStatus.CANCELED);
             req.setPileId(null);
             refreshAndDispatch(now());
+            logCurrentState();
             return;
         }
         if (req.getStatus() == RequestStatus.CHARGING) {
@@ -180,6 +211,7 @@ public class StationService {
             req.setStatus(RequestStatus.CANCELED);
             req.setPileId(null);
             refreshAndDispatch(now());
+            logCurrentState();
         }
     }
 
@@ -194,6 +226,7 @@ public class StationService {
         req.setStatus(RequestStatus.COMPLETED);
         pile.getQueueRequestIds().remove(req.getId());
         refreshAndDispatch(now());
+        logCurrentState();
         return bill;
     }
 
@@ -330,6 +363,7 @@ public class StationService {
         }
         if (targetState == PileState.FAULT) {
             handlePileFault(pile);
+            logCurrentState();
             return;
         }
         pile.setState(targetState);
@@ -339,6 +373,7 @@ public class StationService {
             handlePileRecoveryRebalance(pile.getMode());
         }
         refreshAndDispatch(now());
+        logCurrentState();
     }
 
     public synchronized void setFaultDispatchStrategy(FaultDispatchStrategy strategy) {
@@ -489,6 +524,61 @@ public class StationService {
         systemNow = target;
         refreshAndDispatch(systemNow);
         return systemNow;
+    }
+
+    private void logCurrentState() {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(logFilePath, true))) {
+            pw.println("=== " + now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + " ===");
+
+            // 充电区日志
+            pw.println("充电区:");
+            for (ChargingPile pile : piles.values()) {
+                if (pile.getQueueRequestIds().isEmpty()) {
+                    continue;
+                }
+                pw.println("(" + pile.getId() + ")");
+                for (Long requestId : pile.getQueueRequestIds()) {
+                    ChargingRequest req = requests.get(requestId);
+                    if (req == null) continue;
+                    String vn = req.getVehicleNumber() != null ? req.getVehicleNumber() : "--";
+                    double chargedKwh = 0;
+                    double fee = 0;
+                    if (req.getStatus() == RequestStatus.CHARGING) {
+                        ChargeBill preview = buildPreviewBill(req, pile, now());
+                        chargedKwh = preview.getChargedKwh();
+                        fee = preview.getTotalFee();
+                    }
+                    pw.printf("(%s,%.2f,%.2f)%n", vn, chargedKwh, fee);
+                }
+            }
+
+            // 等候区日志
+            pw.print("等候区:");
+            List<Long> waitingAll = new ArrayList<>();
+            waitingAll.addAll(faultPriorityFast);
+            waitingAll.addAll(faultPrioritySlow);
+            waitingAll.addAll(waitingFast);
+            waitingAll.addAll(waitingSlow);
+            waitingAll.addAll(batchWaitingOrder);
+            if (waitingAll.isEmpty()) {
+                pw.println("(无)");
+            } else {
+                StringBuilder sb = new StringBuilder();
+                for (Long id : waitingAll) {
+                    ChargingRequest req = requests.get(id);
+                    if (req == null) continue;
+                    String vn = req.getVehicleNumber() != null ? req.getVehicleNumber() : "--";
+                    String type = req.getMode() == ChargeMode.FAST ? "F" : "T";
+                    sb.append(String.format("(%s,%s,%.2f)", vn, type, req.getRequestedKwh()));
+                    sb.append("-");
+                }
+                if (sb.length() > 0) sb.setLength(sb.length() - 1);
+                pw.println(sb.toString());
+            }
+            pw.println();
+        } catch (IOException e) {
+            System.err.println("Failed to write log: " + e.getMessage());
+        }
     }
 
     private void initPiles() {
