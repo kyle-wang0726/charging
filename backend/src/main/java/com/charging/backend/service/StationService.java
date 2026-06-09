@@ -737,13 +737,14 @@ public class StationService {
         boolean moved = true;
         while (moved) {
             moved = false;
+            boolean fromFaultPriority = !faultPriorityByMode(mode).isEmpty();
             Long requestId = pollNextDispatchable(mode);
             if (requestId == null) {
                 break;
             }
             ChargingPile bestPile = chooseBestPile(mode, currentTime);
             if (bestPile == null || bestPile.getQueueRequestIds().size() >= config.getChargingQueueLen()) {
-                prependDispatchable(mode, requestId);
+                prependDispatchable(mode, requestId, fromFaultPriority);
                 break;
             }
             ChargingRequest req = requests.get(requestId);
@@ -763,6 +764,7 @@ public class StationService {
         if (freeSlots <= 0) {
             return;
         }
+        List<Long> faultPriorityBefore = new ArrayList<>(faultPriorityByMode(mode));
         List<Long> selected = pollDispatchableBatchByMode(mode, freeSlots, freeSlots > 1);
         for (Long requestId : selected) {
             ChargingRequest req = requests.get(requestId);
@@ -771,7 +773,7 @@ public class StationService {
             }
             ChargingPile bestPile = chooseBestPile(mode, currentTime);
             if (bestPile == null || bestPile.getQueueRequestIds().size() >= config.getChargingQueueLen()) {
-                prependDispatchable(mode, requestId);
+                prependDispatchable(mode, requestId, faultPriorityBefore.contains(requestId));
                 break;
             }
             req.setStatus(RequestStatus.QUEUED);
@@ -869,10 +871,9 @@ public class StationService {
         return waiting.remove(0);
     }
 
-    private void prependDispatchable(ChargeMode mode, Long requestId) {
-        List<Long> priority = faultPriorityByMode(mode);
-        if (!priority.isEmpty()) {
-            priority.add(0, requestId);
+    private void prependDispatchable(ChargeMode mode, Long requestId, boolean faultPriority) {
+        if (faultPriority) {
+            faultPriorityByMode(mode).add(0, requestId);
             return;
         }
         waitingListByMode(mode).add(0, requestId);
@@ -1074,7 +1075,13 @@ public class StationService {
         if (dispatchStrategy == DispatchStrategy.BATCH_SHORTEST_TOTAL_TIME) {
             return (int) requests.values().stream().filter(this::isActive).count();
         }
-        return waitingStationLoad();
+        return waitingAreaLoad();
+    }
+
+    private int waitingAreaLoad() {
+        return waitingFast.size()
+                + waitingSlow.size()
+                + batchWaitingOrder.size();
     }
 
     private int waitingStationLoad() {
