@@ -244,9 +244,12 @@ class AcceptanceRunner:
                         "waiting_area_snapshot": format_requests(
                             detail["active_requests"], "WAITING_AREA"
                         ),
-                        "fault_waiting_snapshot": format_requests(
-                            detail["active_requests"], "FAULT_WAITING"
-                        ),
+                        "fault_waiting_snapshot": " > ".join(
+                            f"{request['vehicle']}:{request['mode']}:"
+                            f"{request['requestKwh']:.2f}kWh"
+                            for request in detail["active_requests"]
+                            if request.get("status") == "FAULT_DISPATCH"
+                        ) or "-",
                     }
                 )
 

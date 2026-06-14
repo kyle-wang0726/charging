@@ -665,7 +665,10 @@ public class StationService {
     }
 
     private void handlePileRecoveryRebalance(ChargeMode mode) {
-        List<Long> merged = new ArrayList<>();
+        // 合并故障优先队列 + 其他 WORKING 同类型充电桩中尚未充电的车辆
+        List<Long> all = new ArrayList<>();
+        all.addAll(faultPriorityByMode(mode));
+        faultPriorityByMode(mode).clear();
         for (ChargingPile pile : piles.values()) {
             if (pile.getState() != PileState.WORKING || pile.getMode() != mode) {
                 continue;
@@ -674,14 +677,21 @@ public class StationService {
             for (Long requestId : pile.getQueueRequestIds()) {
                 ChargingRequest req = requests.get(requestId);
                 if (req != null && req.getStatus() == RequestStatus.QUEUED) {
-                    merged.add(requestId);
+                    all.add(requestId);
                     toRemove.add(requestId);
                 }
             }
             pile.getQueueRequestIds().removeAll(toRemove);
         }
-        merged.sort(Comparator.comparingInt(this::queueOrder));
-        faultPriorityByMode(mode).addAll(merged);
+        // 全部合为一组，按排队号码先后顺序重新排序
+        all.sort(Comparator.comparingInt(this::queueOrder));
+        for (Long id : all) {
+            ChargingRequest req = requests.get(id);
+            if (req != null) {
+                req.setStatus(RequestStatus.FAULT_DISPATCH);
+            }
+        }
+        faultPriorityByMode(mode).addAll(all);
     }
 
     private void movePileQueuedToWaiting(ChargingPile pile) {
