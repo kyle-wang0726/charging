@@ -195,10 +195,13 @@
         </section>
 
         <section v-if="currentView === 'user' && activeTab === 'bills'" class="card">
-        <!-- <div class="card-header">
+        <div class="card-header">
           <h3>充电详单</h3>
-          <button class="btn secondary" @click="refreshBills">刷新详单</button>
-        </div> -->
+          <div class="header-actions">
+            <button class="btn secondary" @click="refreshBills">刷新详单</button>
+            <button class="btn primary" @click="exportBillsCsv">导出 CSV</button>
+          </div>
+        </div>
         <div class="table-wrap" v-if="bills.length">
           <table>
             <thead>
@@ -240,7 +243,12 @@
         <div v-if="showPileControl" class="form-grid cols-3">
           <div class="field">
             <label>充电桩编号</label>
-            <input v-model="admin.pileId" placeholder="如 F1 / T2"/>
+            <select v-model="admin.pileId">
+              <option value="" disabled>请选择充电桩</option>
+              <option v-for="p in piles" :key="p.pileId" :value="p.pileId">
+                {{ p.pileId }} ({{ modeLabel(p.mode) }})
+              </option>
+            </select>
           </div>
           <div class="field">
             <label>状态</label>
@@ -360,6 +368,7 @@
               <option value="month">月报</option>
             </select>
             <button class="btn secondary" @click="refreshReport">查看报表</button>
+            <button class="btn primary" @click="exportReportCsv">导出 CSV</button>
           </div>
         </div>
         <div class="table-wrap" v-if="report.length">

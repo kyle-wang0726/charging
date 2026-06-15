@@ -79,7 +79,7 @@ class AcceptanceRunner:
         self.api(
             "POST",
             "/api/admin/fault-strategy",
-            {"strategy": "PRIORITY"},
+            {"strategy": "TIME_ORDER"},
         )
 
     def ensure_user(self, vehicle: str) -> int:

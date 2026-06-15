@@ -14,6 +14,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +97,55 @@ public class UserController {
     @GetMapping("/bills")
     public ApiResponse<List<ChargeBill>> bills(@RequestParam("userId") Long userId) {
         return ApiResponse.ok(stationService.getUserBills(userId));
+    }
+
+    @GetMapping("/bills/export")
+    public void exportBills(@RequestParam("userId") Long userId, HttpServletResponse response) throws IOException {
+        List<ChargeBill> bills = stationService.getUserBills(userId);
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"charging-bills.csv\"");
+        PrintWriter pw = response.getWriter();
+        pw.write('﻿');
+        pw.println("详单号,订单号,车辆编号,详单状态,生成时间,桩编号,电量(kWh),时长(h),开始时间,停止时间,充电费(元),服务费(元),总费用(元)");
+        for (ChargeBill b : bills) {
+            pw.println(join(
+                csvCell(b.getBillNo()),
+                csvCell(b.getRequestId()),
+                csvCell(b.getVehicleNumber()),
+                csvCell(b.getBillStatus()),
+                csvCell(formatTime(b.getGeneratedAt())),
+                csvCell(b.getPileId()),
+                b.getChargedKwh(),
+                b.getChargedHours(),
+                csvCell(formatTime(b.getStartTime())),
+                csvCell(formatTime(b.getStopTime())),
+                b.getChargeFee(),
+                b.getServiceFee(),
+                b.getTotalFee()
+            ));
+        }
+        pw.flush();
+    }
+
+    private String formatTime(Object time) {
+        return time == null ? "" : String.valueOf(time).replace("T", " ");
+    }
+
+    private String csvCell(Object v) {
+        String s = v == null ? "" : String.valueOf(v);
+        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
+            s = "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+
+    private String join(Object... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(parts[i]);
+        }
+        return sb.toString();
     }
 
     private Map<String, Object> requestData(ChargingRequest req) {

@@ -31,6 +31,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class StationService {
@@ -50,6 +52,11 @@ public class StationService {
     @Value("${log.file-path:./logs/log.txt}")
     private String logFilePath;
 
+    @Value("${users.file-path:./data/users.json}")
+    private String usersFilePath;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @PostConstruct
     public void initLogFile() {
         try {
@@ -65,6 +72,28 @@ public class StationService {
             }
         } catch (IOException e) {
             System.err.println("Failed to init log file: " + e.getMessage());
+        }
+    }
+
+    @PostConstruct
+    public void initUsers() {
+        try {
+            File file = new File(usersFilePath);
+            if (file.exists()) {
+                List<UserAccount> loaded = objectMapper.readValue(file, new TypeReference<List<UserAccount>>() {});
+                for (UserAccount user : loaded) {
+                    if (user.getUsername() != null && !user.getUsername().isEmpty()
+                            && !userByName.containsKey(user.getUsername())) {
+                        users.put(user.getId(), user);
+                        userByName.put(user.getUsername(), user);
+                        if (user.getId() >= userIdSeq.get()) {
+                            userIdSeq.set(user.getId() + 1);
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to load users: " + e.getMessage());
         }
     }
 
@@ -98,6 +127,7 @@ public class StationService {
         UserAccount user = new UserAccount(userIdSeq.getAndIncrement(), username, password);
         users.put(user.getId(), user);
         userByName.put(user.getUsername(), user);
+        saveUsers();
         return user;
     }
 
@@ -1546,5 +1576,18 @@ public class StationService {
 
     private LocalDateTime now() {
         return systemNow;
+    }
+
+    private void saveUsers() {
+        try {
+            File file = new File(usersFilePath);
+            File parent = file.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, new ArrayList<>(users.values()));
+        } catch (IOException e) {
+            System.err.println("Failed to save users: " + e.getMessage());
+        }
     }
 }

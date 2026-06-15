@@ -12,6 +12,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -111,6 +114,30 @@ public class AdminController {
         return ApiResponse.ok(stationService.report(period));
     }
 
+    @GetMapping("/report/export")
+    public void exportReport(@RequestParam(value = "period", defaultValue = "day") String period,
+                             HttpServletResponse response) throws IOException {
+        List<Map<String, Object>> rows = stationService.report(period);
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"charging-report.csv\"");
+        PrintWriter pw = response.getWriter();
+        pw.write('﻿');
+        pw.println("统计周期,桩编号,累计次数,累计时长(h),累计电量(kWh),累计充电费(元),累计服务费(元),累计总费用(元)");
+        for (Map<String, Object> r : rows) {
+            pw.println(join(
+                csvCell(r.get("period")),
+                csvCell(r.get("pileId")),
+                r.get("totalChargeCount"),
+                r.get("totalChargeHours"),
+                r.get("totalChargeKwh"),
+                r.get("totalChargeFee"),
+                r.get("totalServiceFee"),
+                r.get("totalFee")
+            ));
+        }
+        pw.flush();
+    }
+
     @GetMapping("/time")
     public ApiResponse<Map<String, Object>> getSystemTime() {
         Map<String, Object> data = new LinkedHashMap<>();
@@ -130,5 +157,22 @@ public class AdminController {
 
     private String str(Object v) {
         return v == null ? "" : String.valueOf(v).trim();
+    }
+
+    private String csvCell(Object v) {
+        String s = v == null ? "" : String.valueOf(v);
+        if (s.contains(",") || s.contains("\"") || s.contains("\n")) {
+            s = "\"" + s.replace("\"", "\"\"") + "\"";
+        }
+        return s;
+    }
+
+    private String join(Object... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(parts[i]);
+        }
+        return sb.toString();
     }
 }

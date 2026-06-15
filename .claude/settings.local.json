@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mvn compile *)"
+      "Bash(mvn compile *)",
+      "Bash(mvn spring-boot:run)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /PID 26464)",
+      "Bash(taskkill -f -pid 26464)",
+      "Bash(curl -s http://localhost:8080/api/admin/time -m 5)",
+      "Bash(curl -s http://localhost:8080/api/admin/report/export?period=day -o \"C:\\\\Users\\\\HuYiJia\\\\Desktop\\\\charging\\\\backend\\\\data\\\\test-report.csv\")",
+      "Bash(awk '{print $5}')",
+      "Bash(curl -s http://localhost:8080/api/admin/piles)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'{p[\\\\\"pileId\\\\\"]} \\({p[\\\\\"mode\\\\\"]}\\)'\\) for p in d['data']]\")"
     ]
   }
 }

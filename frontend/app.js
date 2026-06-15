@@ -392,6 +392,12 @@ createApp({
         this.bills = res.data || [];
       });
     },
+    async exportBillsCsv() {
+      await this.safeRun("user", async () => {
+        await this.downloadCsv(`/api/user/bills/export?userId=${this.userIdValue()}`, "charging-bills.csv");
+        this.setMessage("user", "详单已导出为 CSV。", "success");
+      });
+    },
     async refreshUserPanels() {
       await this.safeRun("user", async () => {
         if (!this.user.loggedIn) return;
@@ -498,6 +504,12 @@ createApp({
         this.setMessage("admin", ZH.reportRefreshed, "success");
       });
     },
+    async exportReportCsv() {
+      await this.safeRun("admin", async () => {
+        await this.downloadCsv(`/api/admin/report/export?period=${this.admin.reportPeriod}`, "charging-report.csv");
+        this.setMessage("admin", "报表已导出为 CSV。", "success");
+      });
+    },
     async refreshAll() {
       await this.safeRun("admin", async () => {
         await Promise.all([this.refreshSystemTime(), this.refreshPiles(), this.refreshReport()]);
@@ -506,6 +518,22 @@ createApp({
     },
     togglePileControl() {
       this.showPileControl = !this.showPileControl;
+    },
+    async downloadCsv(url, filename) {
+      const resp = await fetch(`${this.baseUrlValue()}${url}`, {
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!resp.ok) {
+        throw new Error("导出失败");
+      }
+      const blob = await resp.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
     },
     startAutoRefresh() {
       if (this.autoTimer) clearInterval(this.autoTimer);
